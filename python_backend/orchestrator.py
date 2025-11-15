@@ -131,6 +131,12 @@ class AgentOrchestrator:
 
         result = self.mistake_detector.detect_issues(spreadsheet_id, sheet_title, config)
 
+        # The full "issues" list can be very large and is mostly redundant with
+        # the flattened "potential_errors" structure. To keep responses compact,
+        # omit the raw issues array from the payload returned to the client.
+        payload = dict(result)
+        payload.pop("issues", None)
+
         messages.append(
           ChatMessage(
             id=str(uuid.uuid4()),
@@ -138,7 +144,7 @@ class AgentOrchestrator:
             content=f"Detected {len(result.get('issues') or [])} issue(s)",
             metadata={
               "toolName": "detect_issues",
-              "payload": result,
+              "payload": payload,
             },
           )
         )
@@ -322,5 +328,4 @@ class AgentOrchestrator:
     if plan.get("documentation"):
       summary += "A documentation sheet with usage instructions has also been added."
     return summary
-
 
