@@ -1,0 +1,34 @@
+
+> mangler-ui@0.0.1 dev
+> vite dev --host localhost --port 5173
+
+You are using Node.js 22.11.0. Vite requires Node.js version 20.19+ or 22.12+. Please upgrade your Node.js version.
+
+  VITE v7.2.2  ready in 278 ms
+
+  ➜  Local:   http://localhost:5173/
+11:02:04 PM [vite] (ssr) page reload .svelte-kit/generated/root.js
+11:02:04 PM [vite] (ssr) page reload .svelte-kit/generated/root.svelte
+11:02:04 PM [vite] (ssr) page reload .svelte-kit/generated/server/internal.js
+11:02:49 PM [vite] (ssr) page reload .svelte-kit/generated/root.js
+11:02:49 PM [vite] (ssr) page reload .svelte-kit/generated/root.svelte
+11:02:49 PM [vite] (ssr) page reload .svelte-kit/generated/server/internal.js
+11:02:55 PM [vite] (ssr) page reload .svelte-kit/generated/root.js
+11:02:55 PM [vite] (ssr) page reload .svelte-kit/generated/root.svelte
+11:02:55 PM [vite] (ssr) page reload .svelte-kit/generated/server/internal.js
+
+[1;31m[500] GET /api/auth/kinde_callback[0m
+Error: Client authentication failed (e.g., unknown client, no client authentication included, or unsupported authentication method).
+    at AuthCodeWithPKCE.<anonymous> (file:///Users/konstavaronen/marketing/mangler-ui/node_modules/@kinde-oss/kinde-typescript-sdk/dist/sdk/oauth2-flows/AuthCodeAbstract.js:292:31)
+    at step (file:///Users/konstavaronen/marketing/mangler-ui/node_modules/@kinde-oss/kinde-typescript-sdk/dist/sdk/oauth2-flows/AuthCodeAbstract.js:43:23)
+    at Object.next (file:///Users/konstavaronen/marketing/mangler-ui/node_modules/@kinde-oss/kinde-typescript-sdk/dist/sdk/oauth2-flows/AuthCodeAbstract.js:24:53)
+    at fulfilled (file:///Users/konstavaronen/marketing/mangler-ui/node_modules/@kinde-oss/kinde-typescript-sdk/dist/sdk/oauth2-flows/AuthCodeAbstract.js:15:58)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+
+[1;31m[500] GET /api/auth/kinde_callback[0m
+Error: Stored state not found
+    at AuthCodeWithPKCE.<anonymous> (file:///Users/konstavaronen/marketing/mangler-ui/node_modules/@kinde-oss/kinde-typescript-sdk/dist/sdk/oauth2-flows/AuthCodeWithPKCE.js:214:35)
+    at step (file:///Users/konstavaronen/marketing/mangler-ui/node_modules/@kinde-oss/kinde-typescript-sdk/dist/sdk/oauth2-flows/AuthCodeWithPKCE.js:58:23)
+    at Object.next (file:///Users/konstavaronen/marketing/mangler-ui/node_modules/@kinde-oss/kinde-typescript-sdk/dist/sdk/oauth2-flows/AuthCodeWithPKCE.js:39:53)
+    at fulfilled (file:///Users/konstavaronen/marketing/mangler-ui/node_modules/@kinde-oss/kinde-typescript-sdk/dist/sdk/oauth2-flows/AuthCodeWithPKCE.js:30:58)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)

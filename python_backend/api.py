@@ -1564,3 +1564,143 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# * ============================================================================
+# * Extension Installation Endpoints
+# * ============================================================================
+
+class InstallExtensionRequest(BaseModel):
+    """Request to install extension to a spreadsheet."""
+    spreadsheet_id: str
+    user_email: Optional[str] = None
+
+
+@app.post("/extension/check-access")
+async def check_sheet_access(request: InstallExtensionRequest) -> Dict[str, Any]:
+    """
+    Check if the service account has access to the spreadsheet.
+
+    The user must share the spreadsheet with the service account email first.
+
+    Example request:
+    {
+        "spreadsheet_id": "1abc...xyz"
+    }
+
+    Returns:
+    {
+        "hasAccess": true,
+        "spreadsheetId": "1abc...xyz",
+        "name": "My Spreadsheet",
+        "serviceAccountEmail": "service@project.iam.gserviceaccount.com"
+    }
+    """
+    try:
+        from .apps_script_installer import AppsScriptInstaller
+
+        installer = AppsScriptInstaller()
+        access_info = installer.check_sheet_access(request.spreadsheet_id)
+        access_info["serviceAccountEmail"] = installer.get_service_account_email()
+
+        return access_info
+
+    except Exception as e:
+        logger.error(f"Error checking sheet access: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/extension/install")
+async def install_extension(request: InstallExtensionRequest) -> Dict[str, Any]:
+    """
+    Install the Mangler AI Copilot extension to a Google Sheet.
+
+    Prerequisites:
+    - User must have shared the spreadsheet with the service account
+    - Service account must have Editor permissions
+
+    Example request:
+    {
+        "spreadsheet_id": "1abc...xyz",
+        "user_email": "user@mangler.finance"  // Optional, for tracking
+    }
+
+    Returns:
+    {
+        "success": true,
+        "scriptId": "abc123",
+        "spreadsheetId": "1abc...xyz",
+        "message": "Extension installed successfully"
+    }
+    """
+    try:
+        from .apps_script_installer import AppsScriptInstaller
+
+        # Load the extension files
+        backend_root = Path(__file__).resolve().parent
+        app_script_dir = backend_root.parent / "app-script"
+
+        code_gs_path = app_script_dir / "Code.gs"
+        sidebar_html_path = app_script_dir / "Sidebar.html"
+
+        if not code_gs_path.exists() or not sidebar_html_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail="Extension files not found. Please ensure Code.gs and Sidebar.html exist in app-script directory."
+            )
+
+        with open(code_gs_path, "r") as f:
+            code_gs_content = f.read()
+
+        with open(sidebar_html_path, "r") as f:
+            sidebar_html_content = f.read()
+
+        # Install the extension
+        installer = AppsScriptInstaller()
+        result = installer.install_extension(
+            spreadsheet_id=request.spreadsheet_id,
+            code_gs_content=code_gs_content,
+            sidebar_html_content=sidebar_html_content,
+        )
+
+        # Log installation for analytics (if user_email provided)
+        if request.user_email and result.get("success"):
+            logger.info(
+                f"Extension installed successfully for user {request.user_email} on spreadsheet {request.spreadsheet_id}",
+                extra={
+                    "user_email": request.user_email,
+                    "spreadsheet_id": request.spreadsheet_id,
+                    "script_id": result.get("scriptId"),
+                }
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error installing extension: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/extension/service-account-email")
+async def get_service_account_email() -> Dict[str, str]:
+    """
+    Get the service account email address for sheet sharing.
+
+    Returns:
+    {
+        "email": "service-account@project.iam.gserviceaccount.com"
+    }
+    """
+    try:
+        from .apps_script_installer import AppsScriptInstaller
+
+        installer = AppsScriptInstaller()
+        email = installer.get_service_account_email()
+
+        return {"email": email}
+
+    except Exception as e:
+        logger.error(f"Error getting service account email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
