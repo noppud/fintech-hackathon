@@ -141,22 +141,23 @@ This backend is configured to be deployable to [Railway](https://railway.com) us
 their FastAPI / config-as-code flow.
 
 - The FastAPI app lives in `python_backend/api.py` as `app`.
-- `python_backend/railway.json` configures Railway to use the Nixpacks builder and
+- `railway.json` in the repo root configures Railway to use the Nixpacks builder and
   start the server with:
 
   ```bash
-  hypercorn api:app --bind "[::]:$PORT"
+  hypercorn python_backend.api:app --bind "[::]:$PORT"
   ```
 
 To deploy:
 
 1. Push this repository (with the `python_backend` directory) to GitHub or another Git provider.
 2. Create a new **Service** in Railway, connecting it to this repo.
-3. In the service settings, set the **Root Directory** to `python_backend` so Railway
-   uses this folder as the project root (where `requirements.txt` and `railway.json` live).
+3. In the service settings, set the **Root Directory** to `.` (the repo root) so Railway
+   sees `railway.json` and `requirements.txt`.
 4. Ensure the required environment variables for this backend are set in Railway
    (see **1. Environment variables** above).
 
-After the first deploy, Railway will build from `requirements.txt` and start
-`hypercorn api:app` on the port defined by `$PORT`. The `/chat` endpoint will be
-available on the Railway-generated URL.
+After the first deploy, Railway will build from the root `requirements.txt` (which
+includes `python_backend/requirements.txt`) and start `hypercorn python_backend.api:app`
+on the port defined by `$PORT`. The `/chat` endpoint will be available on the
+Railway-generated URL.

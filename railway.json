@@ -4,6 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "hypercorn api:app --bind \"[::]:$PORT\""
+    "startCommand": "hypercorn python_backend.api:app --bind \"[::]:$PORT\""
   }
 }
+
