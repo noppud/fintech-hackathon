@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
@@ -14,6 +16,32 @@ class ServiceAccountSheetsClient:
   """
 
   def __init__(self, credentials_path: Optional[str] = None) -> None:
+    scopes = [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.readonly",
+    ]
+
+    # First, allow providing the raw JSON via env var. This is particularly
+    # useful in hosted environments like Railway where mounting a file is
+    # inconvenient.
+    if credentials_path is None:
+      env_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+      if env_json:
+        try:
+          info = json.loads(env_json)
+        except json.JSONDecodeError as exc:
+          raise ValueError(
+            "GOOGLE_SERVICE_ACCOUNT_JSON is set but does not contain valid JSON."
+          ) from exc
+
+        creds = service_account.Credentials.from_service_account_info(
+          info,
+          scopes=scopes,
+        )
+        service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+        self._sheets = service.spreadsheets()
+        return
+
     if credentials_path is None:
       # Resolve project paths relative to this file, not the CWD
       backend_root = Path(__file__).resolve().parent
@@ -48,11 +76,6 @@ class ServiceAccountSheetsClient:
         )
 
       credentials_path = str(resolved_path)
-
-    scopes = [
-      "https://www.googleapis.com/auth/spreadsheets",
-      "https://www.googleapis.com/auth/drive.readonly",
-    ]
 
     creds = service_account.Credentials.from_service_account_file(
       credentials_path,
