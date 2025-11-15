@@ -1,7 +1,0 @@
-Distilled LLM categorization with ML
-
-We plan to build a system that uses LLMs to bootstrap lightweight ML models for categorization tasks. The LLM generates training data and labels, then we automatically train specialized ML models that run orders of magnitude faster and cheaper in production.
-
-For example: categorizing 100k invoices monthly with GPT-5 is expensive and slow. Our approach uses the LLM to train a model that handles +90% of cases at ~1/100th the cost, falling back to LLMs only for edge cases with low confidence.
-
-It's the best of both worlds, LLM-level accuracy with ML-level efficiency. Perfect for eg. Fintech companies that need to process high volumes without burning too much cash.
