@@ -1192,6 +1192,200 @@ def _post_value_snapshot_to_supabase(rows: List[Dict[str, Any]]) -> None:
         raise RuntimeError(f"Supabase insert failed: {exc.status} {body}") from exc
 
 
+def _update_cells_core(request: UpdateCellsRequest) -> Dict[str, Any]:
+    """Core synchronous update_cells logic that can be called from anywhere."""
+    logger.info(
+        f"Update cells request: {len(request.updates)} update(s) on sheet '{request.sheet_title}'",
+        extra={
+            "update_count": len(request.updates),
+            "sheet_title": request.sheet_title,
+            "spreadsheet_id": request.spreadsheet_id or "(default)",
+            "create_snapshot": request.create_snapshot,
+        }
+    )
+
+    # Check if tools are available
+    validator = _get_sheets_service()
+    if validator is None:
+        logger.error(
+            "503 Service Unavailable: Cell update tools not available",
+            extra={
+                "validator_available": GoogleSheetsFormulaValidator is not None,
+                "credentials_available": DEFAULT_CREDENTIALS_PATH is not None,
+                "credentials_path": str(DEFAULT_CREDENTIALS_PATH) if DEFAULT_CREDENTIALS_PATH else "(not set)",
+            }
+        )
+        raise ValueError("Cell update tools are not available on this deployment.")
+
+    if not request.updates:
+        logger.warning("No cell updates provided in request")
+        raise ValueError("No cell updates provided.")
+
+    # Parse spreadsheet ID and gid
+    spreadsheet_url = request.spreadsheet_id or DEFAULT_SPREADSHEET_URL
+    if not spreadsheet_url:
+        logger.error("No spreadsheet URL/ID provided and no default configured")
+        raise ValueError("No spreadsheet URL/ID provided and no default configured.")
+
+    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", spreadsheet_url)
+    url_gid_match = re.search(r"[?&]gid=(\d+)", spreadsheet_url)
+    spreadsheet_id = url_id_match.group(1) if url_id_match else spreadsheet_url
+    gid = int(url_gid_match.group(1)) if url_gid_match else None
+
+    logger.debug(
+        f"Parsed spreadsheet URL: id={spreadsheet_id}, gid={gid}",
+        extra={"spreadsheet_id": spreadsheet_id, "gid": gid}
+    )
+
+    logger.debug(f"Fetching spreadsheet metadata for {spreadsheet_id}")
+    spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
+    logger.info(f"Successfully fetched spreadsheet: {spreadsheet_id}")
+
+    # Resolve sheet - either by gid or by title
+    sheet = None
+    sheets = spreadsheet.get("sheets", [])
+    if not sheets:
+        logger.error("No sheets available in spreadsheet")
+        raise ValueError("No sheets available in spreadsheet.")
+
+    logger.debug(f"Resolving sheet '{request.sheet_title}' from {len(sheets)} available sheet(s)")
+
+    # First try to find by title
+    for candidate in sheets:
+        if candidate["properties"]["title"] == request.sheet_title:
+            sheet = candidate
+            logger.debug(f"Found sheet by title: '{request.sheet_title}'")
+            break
+
+    # If not found by title and gid is provided, try gid
+    if sheet is None and gid is not None:
+        logger.debug(f"Sheet not found by title, trying gid={gid}")
+        for candidate in sheets:
+            if candidate["properties"].get("sheetId") == gid:
+                sheet = candidate
+                logger.debug(f"Found sheet by gid: {gid}")
+                break
+
+    # If still not found, use first sheet and warn
+    if sheet is None:
+        sheet = sheets[0]
+        actual_title = sheet["properties"]["title"]
+        available_titles = [s["properties"]["title"] for s in sheets]
+        if actual_title != request.sheet_title:
+            logger.warning(
+                f"Sheet '{request.sheet_title}' not found, using first sheet '{actual_title}'",
+                extra={
+                    "requested_sheet": request.sheet_title,
+                    "used_sheet": actual_title,
+                    "available_sheets": available_titles,
+                }
+            )
+
+    sheet_props = sheet["properties"]
+    sheet_title = sheet_props["title"]
+
+    logger.info(
+        f"Resolved sheet: '{sheet_title}' (gid={sheet_props.get('sheetId')})",
+        extra={"sheet_title": sheet_title, "sheet_id": sheet_props.get("sheetId")}
+    )
+
+    # STEP 1: Snapshot current values if requested
+    snapshot_batch_id = None
+    if request.create_snapshot:
+        logger.info(f"Creating snapshot for {len(request.updates)} cell(s)")
+        cell_locations = [update.cell_location for update in request.updates]
+        snapshot_batch_id = _snapshot_cell_values(
+            spreadsheet_id,
+            gid,
+            sheet_title,
+            cell_locations,
+            validator,
+        )
+        logger.info(f"Snapshot created: {snapshot_batch_id}")
+    else:
+        logger.debug("Skipping snapshot creation (create_snapshot=false)")
+
+    # STEP 2: Apply updates using batch API
+    batch_data: List[Dict[str, Any]] = []
+    failed_updates: List[Dict[str, str]] = []
+
+    logger.debug("Processing cell updates")
+    for update in request.updates:
+        try:
+            cell_range = f"'{sheet_title}'!{update.cell_location}"
+
+            # Determine value input option
+            value_input_option = "USER_ENTERED" if update.is_formula else "RAW"
+
+            # Handle None/null values
+            if update.value is None:
+                value_to_write = [[""]]
+            else:
+                value_to_write = [[update.value]]
+
+            batch_data.append({
+                "range": cell_range,
+                "values": value_to_write,
+            })
+        except Exception as exc:
+            logger.warning(
+                f"Failed to prepare update for {update.cell_location}: {exc}",
+                extra={"cell_location": update.cell_location, "error": str(exc)}
+            )
+            failed_updates.append({
+                "cell_location": update.cell_location,
+                "error": str(exc),
+            })
+
+    # Execute batch update
+    if batch_data:
+        logger.info(f"Executing batch update for {len(batch_data)} cell(s)")
+        try:
+            validator.service.spreadsheets().values().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "valueInputOption": "USER_ENTERED",
+                    "data": batch_data,
+                },
+            ).execute()
+            logger.info("Batch update completed successfully")
+        except Exception as exc:
+            logger.error(f"Batch update failed: {exc}", exc_info=True)
+            raise ValueError(f"Batch update failed: {exc}")
+
+    # Determine status
+    total_count = len(request.updates)
+    success_count = len(batch_data)
+    fail_count = len(failed_updates)
+
+    if fail_count == 0:
+        status = "success"
+        message = f"Successfully updated {success_count} cell(s) on '{sheet_title}'."
+    elif success_count == 0:
+        status = "error"
+        message = f"Failed to update any cells on '{sheet_title}'."
+    else:
+        status = "partial_success"
+        message = f"Updated {success_count}/{total_count} cell(s) on '{sheet_title}'."
+
+    logger.info(
+        f"Cell update completed successfully: {success_count} cell(s) updated",
+        extra={
+            "success_count": success_count,
+            "fail_count": fail_count,
+            "snapshot_batch_id": snapshot_batch_id,
+        }
+    )
+
+    return {
+        "status": status,
+        "message": message,
+        "count": success_count,
+        "snapshot_batch_id": snapshot_batch_id,
+        "failed_updates": failed_updates if failed_updates else None,
+    }
+
+
 @app.post("/tools/update_cells")
 async def update_cells(request: UpdateCellsRequest) -> Dict[str, Any]:
     """
@@ -1216,223 +1410,15 @@ async def update_cells(request: UpdateCellsRequest) -> Dict[str, Any]:
         "create_snapshot": true
     }
     """
-    logger.info(
-        f"Update cells request: {len(request.updates)} update(s) on sheet '{request.sheet_title}'",
-        extra={
-            "update_count": len(request.updates),
-            "sheet_title": request.sheet_title,
-            "spreadsheet_id": request.spreadsheet_id or "(default)",
-            "create_snapshot": request.create_snapshot,
-        }
-    )
-
-    # Check if tools are available
-    validator = _get_sheets_service()
-    if validator is None:
-        logger.error(
-            "503 Service Unavailable: Cell update tools not available",
-            extra={
-                "validator_available": GoogleSheetsFormulaValidator is not None,
-                "credentials_available": DEFAULT_CREDENTIALS_PATH is not None,
-                "credentials_path": str(DEFAULT_CREDENTIALS_PATH) if DEFAULT_CREDENTIALS_PATH else "(not set)",
-            }
-        )
-        raise HTTPException(
-            status_code=503,
-            detail="Cell update tools are not available on this deployment.",
-        )
-
     try:
-        if not request.updates:
-            logger.warning("No cell updates provided in request")
-            raise ValueError("No cell updates provided.")
-
-        # Parse spreadsheet ID and gid
-        spreadsheet_url = request.spreadsheet_id or DEFAULT_SPREADSHEET_URL
-        if not spreadsheet_url:
-            logger.error("No spreadsheet URL/ID provided and no default configured")
-            raise ValueError("No spreadsheet URL/ID provided and no default configured.")
-
-        url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", spreadsheet_url)
-        url_gid_match = re.search(r"[?&]gid=(\d+)", spreadsheet_url)
-        spreadsheet_id = url_id_match.group(1) if url_id_match else spreadsheet_url
-        gid = int(url_gid_match.group(1)) if url_gid_match else None
-
-        logger.debug(
-            f"Parsed spreadsheet URL: id={spreadsheet_id}, gid={gid}",
-            extra={"spreadsheet_id": spreadsheet_id, "gid": gid}
-        )
-
-        logger.debug(f"Fetching spreadsheet metadata for {spreadsheet_id}")
-        spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
-        logger.info(f"Successfully fetched spreadsheet: {spreadsheet_id}")
-
-        # Resolve sheet - either by gid or by title
-        sheet = None
-        sheets = spreadsheet.get("sheets", [])
-        if not sheets:
-            logger.error("No sheets available in spreadsheet")
-            raise ValueError("No sheets available in spreadsheet.")
-
-        logger.debug(f"Resolving sheet '{request.sheet_title}' from {len(sheets)} available sheet(s)")
-
-        # First try to find by title
-        for candidate in sheets:
-            if candidate["properties"]["title"] == request.sheet_title:
-                sheet = candidate
-                logger.debug(f"Found sheet by title: '{request.sheet_title}'")
-                break
-
-        # If not found by title and gid is provided, try gid
-        if sheet is None and gid is not None:
-            logger.debug(f"Sheet not found by title, trying gid={gid}")
-            for candidate in sheets:
-                if candidate["properties"].get("sheetId") == gid:
-                    sheet = candidate
-                    logger.debug(f"Found sheet by gid: {gid}")
-                    break
-
-        # If still not found, use first sheet and warn
-        if sheet is None:
-            sheet = sheets[0]
-            actual_title = sheet["properties"]["title"]
-            available_titles = [s["properties"]["title"] for s in sheets]
-            if actual_title != request.sheet_title:
-                logger.warning(
-                    f"Sheet '{request.sheet_title}' not found, using first sheet '{actual_title}'",
-                    extra={
-                        "requested_sheet": request.sheet_title,
-                        "used_sheet": actual_title,
-                        "available_sheets": available_titles,
-                    }
-                )
-
-        sheet_props = sheet["properties"]
-        sheet_title = sheet_props["title"]
-
-        logger.info(
-            f"Resolved sheet: '{sheet_title}' (gid={sheet_props.get('sheetId')})",
-            extra={"sheet_title": sheet_title, "sheet_id": sheet_props.get("sheetId")}
-        )
-
-        # STEP 1: Snapshot current values if requested
-        snapshot_batch_id = None
-        if request.create_snapshot:
-            logger.info(f"Creating snapshot for {len(request.updates)} cell(s)")
-            cell_locations = [update.cell_location for update in request.updates]
-            snapshot_batch_id = _snapshot_cell_values(
-                spreadsheet_id,
-                gid,
-                sheet_title,
-                cell_locations,
-                validator,
-            )
-            logger.info(f"Snapshot created: {snapshot_batch_id}")
-        else:
-            logger.debug("Skipping snapshot creation (create_snapshot=false)")
-
-        # STEP 2: Apply updates using batch API
-        batch_data: List[Dict[str, Any]] = []
-        failed_updates: List[Dict[str, str]] = []
-
-        logger.debug("Processing cell updates")
-        for update in request.updates:
-            try:
-                cell_range = f"'{sheet_title}'!{update.cell_location}"
-
-                # Determine value input option
-                value_input_option = "USER_ENTERED" if update.is_formula else "RAW"
-
-                # Handle None/null values
-                if update.value is None:
-                    value_to_write = [[""]]
-                # Handle range updates (fill entire range with same value)
-                elif ":" in update.cell_location:
-                    start_row, end_row, start_col, end_col = _range_bounds(update.cell_location)
-                    num_rows = end_row - start_row + 1
-                    num_cols = end_col - start_col + 1
-                    value_to_write = [[update.value] * num_cols for _ in range(num_rows)]
-                else:
-                    # Single cell
-                    value_to_write = [[update.value]]
-
-                batch_data.append({
-                    "range": cell_range,
-                    "values": value_to_write,
-                })
-
-            except Exception as e:
-                logger.warning(
-                    f"Failed to prepare update for {update.cell_location}: {str(e)}",
-                    extra={"cell_location": update.cell_location, "error": str(e)}
-                )
-                failed_updates.append({
-                    "cell_location": update.cell_location,
-                    "error": str(e),
-                })
-
-        # Execute batch update if we have valid updates
-        if batch_data:
-            logger.info(f"Executing batch update for {len(batch_data)} cell(s)")
-            validator.service.spreadsheets().values().batchUpdate(
-                spreadsheetId=spreadsheet_id,
-                body={
-                    "valueInputOption": "USER_ENTERED",  # This allows formulas
-                    "data": batch_data,
-                },
-            ).execute()
-            logger.info(f"Batch update completed successfully")
-        else:
-            logger.warning("No valid updates to apply")
-
-        success_count = len(batch_data)
-        total_count = len(request.updates)
-
-        if failed_updates:
-            status = "partial_success" if success_count > 0 else "error"
-            message = f"Updated {success_count}/{total_count} cells on '{sheet_title}'. {len(failed_updates)} failed."
-            logger.warning(
-                f"Cell update completed with failures: {success_count}/{total_count} succeeded",
-                extra={
-                    "success_count": success_count,
-                    "failed_count": len(failed_updates),
-                    "total_count": total_count,
-                    "failed_cells": [f["cell_location"] for f in failed_updates],
-                }
-            )
-        else:
-            status = "success"
-            message = f"Updated {success_count} cell(s) on '{sheet_title}'."
-            logger.info(
-                f"Cell update completed successfully: {success_count} cell(s) updated",
-                extra={"success_count": success_count}
-            )
-
-        response_data = {
-            "status": status,
-            "message": message,
-            "count": success_count,
-        }
-
-        if snapshot_batch_id:
-            response_data["snapshot_batch_id"] = snapshot_batch_id
-
-        if failed_updates:
-            response_data["failed_updates"] = failed_updates
-
-        return response_data
-
-    except Exception as e:
-        logger.error(
-            f"Update cells failed: {str(e)}",
-            exc_info=True,
-            extra={
-                "spreadsheet_id": request.spreadsheet_id,
-                "sheet_title": request.sheet_title,
-                "update_count": len(request.updates),
-            }
-        )
+        # Call the synchronous core function
+        return _update_cells_core(request)
+    except ValueError as e:
+        # Convert ValueError to HTTPException
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Update cells failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/tools/restore_cells")

@@ -239,8 +239,8 @@ class AgentOrchestrator:
         )
 
       elif tool_name == "update_cells":
-        # Import here to avoid circular imports
-        from .api import update_cells as update_cells_api, UpdateCellsRequest
+        # Import core function from api module
+        from .api import _update_cells_core, UpdateCellsRequest
 
         # Get updates from arguments
         updates = args.get("updates")
@@ -259,21 +259,15 @@ class AgentOrchestrator:
         sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle or "Sheet1"
         create_snapshot = args.get("create_snapshot", True)
 
-        # Call the update_cells function directly (internal call, no HTTP)
-        request = UpdateCellsRequest(
-          updates=updates,
-          spreadsheet_id=spreadsheet_id,
-          sheet_title=sheet_title,
-          create_snapshot=create_snapshot,
-        )
-
         try:
-          # Call async function - we're already in an async context
-          import asyncio
-          if asyncio.iscoroutinefunction(update_cells_api):
-            result = await update_cells_api(request)
-          else:
-            result = update_cells_api(request)
+          # Create request object and call core function
+          request = UpdateCellsRequest(
+            updates=updates,
+            spreadsheet_id=spreadsheet_id,
+            sheet_title=sheet_title,
+            create_snapshot=create_snapshot,
+          )
+          result = _update_cells_core(request)
         except Exception as exc:
           logger.error(f"update_cells failed: {str(exc)}", exc_info=True)
           raise RuntimeError(f"Failed to execute update_cells: {exc}")
