@@ -578,20 +578,24 @@ async def apply_colors(requests: List[ColorRequest]) -> Dict[str, Any]:
         sheet_title = sheet_props["title"]
 
         # * STEP 1: Snapshot current colors BEFORE applying new ones
+        # Use ONE snapshot_batch_id for ALL cells in this operation
+        snapshot_batch_id = str(uuid.uuid4())
+        logger.info(f"[COLOR] Creating snapshot with batch_id: {snapshot_batch_id}")
+
         cell_ranges = list(set(req.cell_location for req in requests))
         rows_to_insert: List[Dict[str, Any]] = []
-        
+
         for range_ref in cell_ranges:
-            snapshot_batch_id = uuid.uuid5(
-                uuid.NAMESPACE_URL,
-                f"{spreadsheet_id}:{gid}:{range_ref}",
-            )
+            logger.debug(f"[COLOR] Fetching colors for range: {range_ref}")
             colors_by_cell = _fetch_colors_for_range(validator, spreadsheet_id, sheet_title, range_ref)
-            for cell in _expand_range(range_ref):
+            expanded_cells = _expand_range(range_ref)
+            logger.debug(f"[COLOR] Range '{range_ref}' expanded to {len(expanded_cells)} cell(s)")
+
+            for cell in expanded_cells:
                 color = colors_by_cell.get(cell, WHITE)
                 rows_to_insert.append(
                     {
-                        "snapshot_batch_id": str(snapshot_batch_id),
+                        "snapshot_batch_id": snapshot_batch_id,  # Same ID for ALL cells
                         "spreadsheet_id": spreadsheet_id,
                         "gid": gid,
                         "cell": cell,
@@ -600,18 +604,15 @@ async def apply_colors(requests: List[ColorRequest]) -> Dict[str, Any]:
                         "blue": float(color["blue"]),
                     }
                 )
-        
+
+        logger.info(f"[COLOR] Snapshotting {len(rows_to_insert)} cell(s) to Supabase")
+
         if rows_to_insert:
             _post_to_supabase(rows_to_insert)
+            logger.info(f"[COLOR] ✓ Snapshot created with {len(rows_to_insert)} cell(s)")
 
-        # * Get first snapshot batch ID for response
-        first_snapshot_batch_id = None
-        if cell_ranges:
-            first_range = cell_ranges[0]
-            first_snapshot_batch_id = str(uuid.uuid5(
-                uuid.NAMESPACE_URL,
-                f"{spreadsheet_id}:{gid}:{first_range}",
-            ))
+        # Return the snapshot batch ID for restore
+        first_snapshot_batch_id = snapshot_batch_id
 
         # * STEP 2: Apply the new colors
         batch_requests = [
