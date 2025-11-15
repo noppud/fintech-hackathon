@@ -221,17 +221,26 @@ def _build_repeat_cell(sheet_id: int, row: int, col: int, color: Color) -> Dict[
     }
 
 
-def main() -> None:
-    snapshot_batch_id, json_path = _parse_args()
-
-    expected_cells = None
-    sheet_url = None
-    if json_path:
-        cells, sheet_url = _load_expected_cells(json_path)
-        expected_cells = set(cells)
+def restore_snapshot_batch(
+    snapshot_batch_id: str,
+    sheet_url: Optional[str] = None,
+    expected_ranges: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """# * Restore colors for the given snapshot batch."""
+    if not snapshot_batch_id:
+        raise ValueError("Snapshot batch id is required.")
 
     if sheet_url is None:
         sheet_url = DEFAULT_SPREADSHEET_URL
+
+    expected_cells = None
+    if expected_ranges:
+        cells: List[str] = []
+        for range_ref in expected_ranges:
+            if not isinstance(range_ref, str):
+                raise ValueError("Cell range references must be strings.")
+            cells.extend(_expand_range(range_ref.strip().upper()))
+        expected_cells = set(cells)
 
     spreadsheet_id, gid = _parse_sheet_url(sheet_url)
 
@@ -259,17 +268,6 @@ def main() -> None:
     snapshot_rows = _fetch_snapshot_rows(snapshot_batch_id, spreadsheet_id, gid)
     if not snapshot_rows:
         raise ValueError(f"No snapshot rows found for batch id '{snapshot_batch_id}'.")
-
-    if json_path:
-        mismatched_urls = [
-            row.get("sheet_url")
-            for row in snapshot_rows
-            if row.get("sheet_url") and row.get("sheet_url") != sheet_url
-        ]
-        if mismatched_urls:
-            raise ValueError(
-                "Snapshot rows belong to a different sheet_url than the provided input JSON."
-            )
 
     if expected_cells is not None:
         missing = expected_cells - {row["cell"] for row in snapshot_rows}
@@ -301,9 +299,29 @@ def main() -> None:
         body={"requests": requests},
     ).execute()
 
-    print(
-        f"Restored {len(requests)} cell color(s) on '{sheet_title}' from snapshot batch '{snapshot_batch_id}'."
+    return {
+        "status": "success",
+        "message": f"Restored {len(requests)} cell color(s) on '{sheet_title}' "
+        f"from snapshot batch '{snapshot_batch_id}'.",
+        "count": len(requests),
+    }
+
+
+def main() -> None:
+    snapshot_batch_id, json_path = _parse_args()
+
+    sheet_url = None
+    expected_ranges = None
+    if json_path:
+        expected_cells, sheet_url = _load_expected_cells(json_path)
+        expected_ranges = expected_cells
+
+    result = restore_snapshot_batch(
+        snapshot_batch_id,
+        sheet_url=sheet_url,
+        expected_ranges=expected_ranges,
     )
+    print(result["message"])
 
 
 if __name__ == "__main__":

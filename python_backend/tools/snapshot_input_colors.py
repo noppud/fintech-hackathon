@@ -234,9 +234,25 @@ def _post_to_supabase(rows: List[Dict[str, Any]]) -> None:
         raise RuntimeError(f"Supabase insert failed: {exc.status} {body}") from exc
 
 
-def main() -> None:
-    input_path = _parse_args()
-    ranges, sheet_url = _load_cell_ranges(input_path)
+def snapshot_ranges_to_supabase(ranges: List[str], sheet_url: str) -> Dict[str, Any]:
+    """# * Snapshot the provided ranges and persist them to Supabase."""
+    if not ranges:
+        raise ValueError("No ranges provided for snapshot.")
+
+    normalized_ranges = []
+    seen = set()
+    for range_ref in ranges:
+        if not isinstance(range_ref, str):
+            raise ValueError("Range references must be strings.")
+        trimmed = range_ref.strip().upper()
+        if not trimmed:
+            continue
+        if trimmed not in seen:
+            seen.add(trimmed)
+            normalized_ranges.append(trimmed)
+
+    if not normalized_ranges:
+        raise ValueError("No valid ranges provided for snapshot.")
 
     spreadsheet_id, gid = _parse_sheet_url(sheet_url)
 
@@ -261,11 +277,14 @@ def main() -> None:
     sheet_title = sheet_props["title"]
 
     rows_to_insert: List[Dict[str, Any]] = []
-    for range_ref in ranges:
+    snapshot_ids: Dict[str, str] = {}
+
+    for range_ref in normalized_ranges:
         snapshot_batch_id = uuid.uuid5(
             uuid.NAMESPACE_URL,
             f"{spreadsheet_id}:{gid}:{range_ref}",
         )
+        snapshot_ids[range_ref] = str(snapshot_batch_id)
         colors_by_cell = _fetch_colors_for_range(validator, spreadsheet_id, sheet_title, range_ref)
         for cell in _expand_range(range_ref):
             color = colors_by_cell.get(cell, WHITE)
@@ -285,17 +304,25 @@ def main() -> None:
     _post_to_supabase(rows_to_insert)
 
     total_cells = len(rows_to_insert)
-    total_batches = len(ranges)
-    print(f"Stored {total_cells} cell color snapshot(s) across {total_batches} batch id(s).")
-    
-    # * Print first snapshot batch ID for test_run.py to capture
-    if ranges:
-        first_range = ranges[0]
-        first_snapshot_batch_id = uuid.uuid5(
-            uuid.NAMESPACE_URL,
-            f"{spreadsheet_id}:{gid}:{first_range}",
-        )
-        print(f"Snapshot batch ID: {first_snapshot_batch_id}")
+    total_batches = len(normalized_ranges)
+    first_snapshot_batch_id = snapshot_ids.get(normalized_ranges[0]) if normalized_ranges else None
+
+    return {
+        "status": "success",
+        "message": f"Stored {total_cells} cell color snapshot(s) across {total_batches} batch id(s).",
+        "count": total_cells,
+        "range_snapshot_ids": snapshot_ids,
+        "first_snapshot_batch_id": first_snapshot_batch_id,
+    }
+
+
+def main() -> None:
+    input_path = _parse_args()
+    ranges, sheet_url = _load_cell_ranges(input_path)
+    result = snapshot_ranges_to_supabase(ranges, sheet_url)
+    print(result["message"])
+    if result["first_snapshot_batch_id"]:
+        print(f"Snapshot batch ID: {result['first_snapshot_batch_id']}")
 
 
 if __name__ == "__main__":

@@ -175,6 +175,14 @@ def _build_request(sheet_id: int, cell_location: str, color: Color, note: str) -
 def main() -> None:
     input_path = _parse_args()
     entries, sheet_url = _load_payload(input_path)
+    result = apply_colors_to_sheet(entries, sheet_url)
+    print(result["message"])
+
+
+def apply_colors_to_sheet(entries: List[Dict[str, Any]], sheet_url: str) -> Dict[str, Any]:
+    """# * Apply colors to provided entries on the given sheet URL."""
+    if not entries:
+        raise ValueError("No color entries provided.")
 
     spreadsheet_id, gid = _parse_sheet_url(sheet_url)
 
@@ -196,7 +204,11 @@ def main() -> None:
         body={"requests": requests},
     ).execute()
 
-    print(f"Colored {len(requests)} target range(s) on '{sheet_props['title']}'.")
+    return {
+        "status": "success",
+        "message": f"Colored {len(requests)} target range(s) on '{sheet_props['title']}'.",
+        "count": len(requests),
+    }
 
 
 if __name__ == "__main__":

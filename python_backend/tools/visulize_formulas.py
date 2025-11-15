@@ -81,11 +81,13 @@ def _build_request(sheet_id: int, row: int, col: int, color: Color, note: str) -
     }
 
 
-def main() -> None:
-    """# * Entry point for coloring formula issues."""
-    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", DEFAULT_SPREADSHEET_URL)
-    url_gid_match = re.search(r"[?&]gid=(\d+)", DEFAULT_SPREADSHEET_URL)
-    spreadsheet_id = url_id_match.group(1) if url_id_match else DEFAULT_SPREADSHEET_URL
+def visualize_formulas(sheet_url: Optional[str] = None) -> Dict[str, Any]:
+    """# * Color-code formulas and hard-coded values on the target sheet."""
+    target_url = sheet_url or DEFAULT_SPREADSHEET_URL
+
+    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", target_url)
+    url_gid_match = re.search(r"[?&]gid=(\d+)", target_url)
+    spreadsheet_id = url_id_match.group(1) if url_id_match else target_url
     gid = int(url_gid_match.group(1)) if url_gid_match else None
 
     validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
@@ -98,8 +100,11 @@ def main() -> None:
     cells = validator.get_sheet_cells(spreadsheet_id, sheet_name)
     targets = [cell for cell in cells if cell.has_formula or cell.has_numeric_constant]
     if not targets:
-        print("No formulas or hard-coded values detected; nothing to visualize.")
-        return
+        return {
+            "status": "no_cells",
+            "message": f"No formulas or hard-coded values detected on '{sheet_name}'.",
+            "count": 0,
+        }
 
     requests: List[Dict[str, Any]] = []
     for cell in targets:
@@ -112,10 +117,18 @@ def main() -> None:
         body={"requests": requests},
     ).execute()
 
-    print(
-        f"Colored {len(requests)} cell(s) on '{sheet_name}' "
-        "(formulas → green, values → orange)."
-    )
+    return {
+        "status": "success",
+        "message": f"Colored {len(requests)} cell(s) on '{sheet_name}' "
+        "(formulas → green, values → orange).",
+        "count": len(requests),
+    }
+
+
+def main() -> None:
+    """# * Entry point for coloring formula issues."""
+    result = visualize_formulas()
+    print(result["message"])
 
 
 if __name__ == "__main__":
