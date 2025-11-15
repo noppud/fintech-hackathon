@@ -1,12 +1,10 @@
 <script lang="ts">
+	import MetricsPanel from '$lib/components/MetricsPanel.svelte';
 	let { data } = $props();
 
 	const userEmail = data?.user?.email;
 	const missingKindeConfig = data?.missingKindeConfig;
 	const stats = data?.stats;
-	const users24h = stats?.users24h ?? '—';
-	const sheets24h = stats?.sheets24h ?? '—';
-	const metricsAvailable = stats?.available ?? false;
 </script>
 
 <svelte:head>
@@ -31,32 +29,11 @@
 		</div>
 	</div>
 
-	<div class="dashboard__panel">
-		<div class="dashboard__panel-header">
-			<span>Last 24 hours</span>
-			<span class="dashboard__status-dot" aria-hidden="true"></span>
-			{#if metricsAvailable}
-				Live telemetry
-			{:else}
-				Metrics unavailable
-			{/if}
-		</div>
-
-		{#if metricsAvailable}
-			<ul class="dashboard__metrics">
-				<li>
-					<p class="label">Active users</p>
-					<p class="value">{users24h}</p>
-				</li>
-				<li>
-					<p class="label">Sheets mangled</p>
-					<p class="value">{sheets24h}</p>
-				</li>
-			</ul>
-		{:else}
-			<p class="dashboard__note">Connect Supabase env vars to surface live usage metrics.</p>
-		{/if}
-	</div>
+	<MetricsPanel
+		stats={stats}
+		className="dashboard__panel"
+		offlineNote="Connect Supabase env vars to surface live usage metrics."
+	/>
 
 	{#if missingKindeConfig}
 		<div class="dashboard__warning">
@@ -145,66 +122,6 @@
 
 	.dashboard__btn:hover {
 		transform: translateY(-1px);
-	}
-
-	.dashboard__panel {
-		padding: 2rem;
-		border-radius: 1.5rem;
-		background: rgba(15, 23, 42, 0.6);
-		border: 1px solid rgba(148, 163, 184, 0.2);
-	}
-
-	.dashboard__panel-header {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.95rem;
-		color: rgba(248, 250, 252, 0.7);
-		margin-bottom: 1.5rem;
-	}
-
-	.dashboard__status-dot {
-		width: 0.75rem;
-		height: 0.75rem;
-		border-radius: 50%;
-		background: #22d3ee;
-		box-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
-		display: inline-flex;
-	}
-
-	.dashboard__metrics {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		display: grid;
-		gap: 1.25rem;
-	}
-
-	.dashboard__metrics li {
-		padding: 1.1rem;
-		border-radius: 1rem;
-		background: rgba(2, 6, 23, 0.4);
-		border: 1px solid rgba(148, 163, 184, 0.2);
-	}
-
-	.dashboard__note {
-		font-size: 0.95rem;
-		color: rgba(248, 250, 252, 0.7);
-		margin: 0;
-	}
-
-	.label {
-		font-size: 0.8rem;
-		text-transform: uppercase;
-		letter-spacing: 0.2em;
-		margin-bottom: 0.35rem;
-		color: rgba(148, 163, 184, 0.8);
-	}
-
-	.value {
-		font-size: 1.35rem;
-		margin: 0;
-		font-weight: 600;
 	}
 
 	.dashboard__warning {

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -74,6 +75,27 @@ backend = None
 service = None
 
 app = FastAPI(title="Sheet Mangler Chat API (Python Frontend)")
+
+default_allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://mangler.finance",
+    "https://www.mangler.finance",
+]
+
+extra_origins = os.environ.get("CORS_ALLOWED_ORIGINS")
+if extra_origins:
+    default_allowed_origins.extend(
+        origin.strip() for origin in extra_origins.split(",") if origin.strip()
+    )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=default_allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _sheets_service = None
 

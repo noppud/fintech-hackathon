@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MetricsPanel from '$lib/components/MetricsPanel.svelte';
 	let { data } = $props();
 
 	const errorMessage =
@@ -6,6 +7,7 @@
 
 	const missingKindeConfig = data?.missingKindeConfig ?? false;
 	const missingEnv = (data?.missingEnv as string[]) ?? [];
+	const stats = data?.stats;
 	const configMessage = missingKindeConfig
 		? `Authentication is not configured yet. Missing env variables: ${missingEnv.join(', ')}`
 		: null;
@@ -29,6 +31,14 @@
 				<li>Auto-comment and notify stakeholders when assumptions drift.</li>
 				<li>Compose multi-step workflows across Sheets, Gmail and Drive.</li>
 			</ul>
+
+			<div class="login__metrics">
+				<MetricsPanel
+					stats={stats}
+					heading="Last 24 hours"
+					offlineNote="Connect Supabase env vars to surface live usage metrics."
+				/>
+			</div>
 		</div>
 
 		<div class="login__card">
@@ -132,6 +142,11 @@
 		background: #29e3ff;
 		margin-top: 0.5rem;
 		box-shadow: 0 0 16px rgba(41, 227, 255, 0.45);
+	}
+
+	.login__metrics {
+		margin-top: 2rem;
+		max-width: 420px;
 	}
 
 	.login__card {
