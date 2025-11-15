@@ -18,6 +18,9 @@ Make sure these environment variables are set in the same shell:
 - `OPENROUTER_API_KEY` – your OpenRouter key
 - `DEFAULT_LLM_MODEL` – e.g. `anthropic/claude-3.5-sonnet`
 - Optional: `GOOGLE_SERVICE_ACCOUNT_FILE` – overrides the default service-account JSON path
+- Optional: Supabase config for conversation persistence:
+  - `SUPABASE_URL`
+  - one of: `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SERVICE_KEY`, or `SUPABASE_ANON_KEY`
 
 The service-account JSON must be accessible to the backend (see `python_backend/sheets_client.py` for lookup order).
 

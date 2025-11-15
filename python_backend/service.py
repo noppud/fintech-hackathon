@@ -4,6 +4,7 @@ import uuid
 from typing import Optional
 
 from .backend import ChatBackend
+from .conversation_logger import ConversationLogger
 from .memory import ConversationStore
 from .models import ChatMessage, ChatMessageRole, ChatRequest, ChatResponse, SheetContext
 
@@ -17,6 +18,7 @@ class ChatService:
   def __init__(self, backend: ChatBackend, store: Optional[ConversationStore] = None) -> None:
     self.backend = backend
     self.store = store or ConversationStore()
+    self._logger = ConversationLogger()
 
   def chat(self, request: ChatRequest) -> ChatResponse:
     """
@@ -28,10 +30,26 @@ class ChatService:
     response = self.backend.send_chat(request)
 
     if request.sessionId:
-      # Store both the request history and the new messages
-      history = self.store.get_history(request.sessionId)
-      combined = history + request.messages + response.messages
-      self.store.set_history(request.sessionId, combined)
+      session_id = request.sessionId
+
+      # Store both the request history and the new messages.
+      # The client is expected to send the full history in request.messages,
+      # so we use the existing in-memory history to detect which messages are new.
+      history = self.store.get_history(session_id)
+      seen_ids = {msg.id for msg in history}
+
+      new_request_messages = [m for m in request.messages if m.id not in seen_ids]
+      combined = request.messages + response.messages
+
+      self.store.set_history(session_id, combined)
+
+      if self._logger.enabled:
+        # Persist only newly seen request messages plus this turn's responses.
+        self._logger.log_messages(
+          session_id,
+          list(new_request_messages) + list(response.messages),
+          sheet_context=request.sheetContext,
+        )
 
     return response
 
@@ -64,9 +82,16 @@ class ChatService:
 
     response = self.backend.send_chat(request)
 
-    # The current Next.js /api/chat returns only the new messages; append them
-    self.store.set_history(session_id, full_history + response.messages)
+    # The current backend returns only the new messages; append them
+    combined = full_history + response.messages
+    self.store.set_history(session_id, combined)
+
+    if self._logger.enabled:
+      # For CLI-style usage we know exactly which messages are new.
+      self._logger.log_messages(
+        session_id,
+        [user_message] + list(response.messages),
+        sheet_context=sheet_ctx,
+      )
 
     return response
-
-

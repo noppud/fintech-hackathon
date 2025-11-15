@@ -1,0 +1,17 @@
+# OS / editor
+.DS_Store
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Env/config
+*.env
+*.env.local
+
+# Google service account keys (never commit secrets)
+python_backend/service-account.json
+service-account.json
+
