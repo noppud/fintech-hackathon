@@ -4,6 +4,7 @@
 
 import re
 import sys
+import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -19,6 +20,7 @@ from tools.google_sheets import (
     DEFAULT_SPREADSHEET_URL,
     GoogleSheetsFormulaValidator,
 )
+from tools.snapshot_input_colors import save_snapshot_rows
 
 load_dotenv()
 
@@ -104,7 +106,24 @@ def visualize_formulas(sheet_url: Optional[str] = None) -> Dict[str, Any]:
             "status": "no_cells",
             "message": f"No formulas or hard-coded values detected on '{sheet_name}'.",
             "count": 0,
+            "snapshot_batch_id": None,
         }
+
+    snapshot_batch_id = str(uuid.uuid4())
+    rows_to_insert: List[Dict[str, Any]] = [
+        {
+            "snapshot_batch_id": snapshot_batch_id,
+            "spreadsheet_id": spreadsheet_id,
+            "gid": gid,
+            "cell": cell.cell,
+            "red": float(cell.color["red"]),
+            "green": float(cell.color["green"]),
+            "blue": float(cell.color["blue"]),
+            "sheet_url": target_url,
+        }
+        for cell in targets
+    ]
+    save_snapshot_rows(rows_to_insert)
 
     requests: List[Dict[str, Any]] = []
     for cell in targets:
@@ -122,6 +141,7 @@ def visualize_formulas(sheet_url: Optional[str] = None) -> Dict[str, Any]:
         "message": f"Colored {len(requests)} cell(s) on '{sheet_name}' "
         "(formulas → green, values → orange).",
         "count": len(requests),
+        "snapshot_batch_id": snapshot_batch_id,
     }
 
 

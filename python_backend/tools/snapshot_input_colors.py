@@ -234,6 +234,11 @@ def _post_to_supabase(rows: List[Dict[str, Any]]) -> None:
         raise RuntimeError(f"Supabase insert failed: {exc.status} {body}") from exc
 
 
+def save_snapshot_rows(rows: List[Dict[str, Any]]) -> None:
+    """Persist pre-built snapshot rows to Supabase."""
+    _post_to_supabase(rows)
+
+
 def snapshot_ranges_to_supabase(ranges: List[str], sheet_url: str) -> Dict[str, Any]:
     """# * Snapshot the provided ranges and persist them to Supabase."""
     if not ranges:

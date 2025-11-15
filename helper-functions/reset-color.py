@@ -2,6 +2,7 @@
 Reset all cell background colors and notes on the configured Google Sheet.
 """
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -14,14 +15,19 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# * Ensure python_backend package is importable for tools.*
+PYTHON_BACKEND_DIR = PROJECT_ROOT / "python_backend"
+if str(PYTHON_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(PYTHON_BACKEND_DIR))
+
+# * Load environment variables from the project root so DEFAULT_SPREADSHEET_URL resolves.
+load_dotenv(PROJECT_ROOT / ".env")
+
 from tools.google_sheets import (
     DEFAULT_CREDENTIALS_PATH,
     DEFAULT_SPREADSHEET_URL,
     GoogleSheetsFormulaValidator,
 )
-
-# * Load environment variables
-load_dotenv()
 
 
 def _resolve_sheet(spreadsheet: dict, gid: Optional[int]) -> dict:
@@ -39,8 +45,24 @@ def _resolve_sheet(spreadsheet: dict, gid: Optional[int]) -> dict:
     raise ValueError(f"No sheet found with gid={gid}.")
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Reset all cell background colors and notes on the target Google Sheet.",
+    )
+    parser.add_argument(
+        "--sheet-url",
+        dest="sheet_url",
+        help="Explicit sheet URL to override SPREADSHEET_URL env.",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
-    spreadsheet_url = DEFAULT_SPREADSHEET_URL
+    args = _parse_args()
+    spreadsheet_url = args.sheet_url or DEFAULT_SPREADSHEET_URL
+
+    if not spreadsheet_url:
+        raise ValueError("SPREADSHEET_URL is empty; set it in .env or pass --sheet-url.")
     credentials_path = DEFAULT_CREDENTIALS_PATH
 
     url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", spreadsheet_url)
