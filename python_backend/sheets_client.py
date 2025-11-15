@@ -39,6 +39,7 @@ class ServiceAccountSheetsClient:
           scopes=scopes,
         )
         service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+        self._service = service
         self._sheets = service.spreadsheets()
         return
 
@@ -83,6 +84,7 @@ class ServiceAccountSheetsClient:
     )
 
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
+    self._service = service
     self._sheets = service.spreadsheets()
 
   # --- Metadata ---
@@ -376,3 +378,8 @@ class ServiceAccountSheetsClient:
       )
       .execute()
     )
+
+  @property
+  def service(self):
+    """Expose the underlying Google Sheets service."""
+    return self._service

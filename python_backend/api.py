@@ -20,6 +20,7 @@ from .logging_config import get_logger
 from .memory import ConversationStore
 from .models import ChatRequest, ChatResponse
 from .service import ChatService
+from .sheets_client import ServiceAccountSheetsClient
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -45,6 +46,20 @@ except ImportError:  # pragma: no cover - optional tools
 from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
+# Allow environment variables to override tool defaults when available.
+if DEFAULT_CREDENTIALS_PATH is None:
+    env_credentials = os.environ.get("DEFAULT_CREDENTIALS_PATH") or os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
+    if env_credentials:
+        DEFAULT_CREDENTIALS_PATH = Path(env_credentials)
+elif isinstance(DEFAULT_CREDENTIALS_PATH, str):
+    DEFAULT_CREDENTIALS_PATH = Path(DEFAULT_CREDENTIALS_PATH)
+
+env_spreadsheet = os.environ.get("DEFAULT_SPREADSHEET_URL") or os.environ.get("SPREADSHEET_URL")
+if env_spreadsheet:
+    DEFAULT_SPREADSHEET_URL = env_spreadsheet
+else:
+    DEFAULT_SPREADSHEET_URL = DEFAULT_SPREADSHEET_URL or ""
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 
@@ -58,6 +73,59 @@ backend = None
 service = None
 
 app = FastAPI(title="Sheet Mangler Chat API (Python Frontend)")
+
+_sheets_service = None
+
+
+class _SheetsServiceWrapper:
+    """Adapter to provide the minimal interface expected by the tool endpoints."""
+
+    def __init__(self, client: ServiceAccountSheetsClient) -> None:
+        self._client = client
+        self.service = client.service
+
+    def fetch_spreadsheet(self, spreadsheet_id: str) -> Dict[str, Any]:
+        return self.service.spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+        ).execute()
+
+
+def _get_sheets_service():
+    """
+    Attempt to initialize a Google Sheets API helper.
+
+    Prefers the TypeScript tool helper (if available) and falls back to the
+    Python ServiceAccountSheetsClient so the /tools endpoints still function
+    even if the optional tools package is missing.
+    """
+    global _sheets_service
+
+    if _sheets_service is not None:
+        return _sheets_service
+
+    if GoogleSheetsFormulaValidator is not None and DEFAULT_CREDENTIALS_PATH:
+        try:
+            _sheets_service = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
+            logger.info("Using GoogleSheetsFormulaValidator for sheet tools")
+            return _sheets_service
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                f"Failed to initialize GoogleSheetsFormulaValidator: {exc}",
+                exc_info=True,
+            )
+
+    try:
+        credentials_input = str(DEFAULT_CREDENTIALS_PATH) if DEFAULT_CREDENTIALS_PATH else None
+        client = ServiceAccountSheetsClient(credentials_input)
+        _sheets_service = _SheetsServiceWrapper(client)
+        logger.info("Falling back to ServiceAccountSheetsClient for sheet tools")
+        return _sheets_service
+    except Exception as exc:
+        logger.error(
+            f"Unable to initialize any Google Sheets client: {exc}",
+            exc_info=True,
+        )
+        return None
 
 
 # * ============================================================================
@@ -325,8 +393,15 @@ async def apply_colors(requests: List[ColorRequest]) -> Dict[str, Any]:
     """
     logger.info(f"Color request: {len(requests)} cell(s) to color")
 
-    if GoogleSheetsFormulaValidator is None or DEFAULT_CREDENTIALS_PATH is None:
-        logger.error("503 Service Unavailable: Color tools not available")
+    validator = _get_sheets_service()
+    if validator is None:
+        logger.error(
+            "503 Service Unavailable: Color tools not available",
+            extra={
+                "has_validator": GoogleSheetsFormulaValidator is not None,
+                "credentials_path": str(DEFAULT_CREDENTIALS_PATH) if DEFAULT_CREDENTIALS_PATH else "(missing)",
+            }
+        )
         raise HTTPException(
             status_code=503,
             detail="Color tools are not available on this deployment.",
@@ -342,7 +417,6 @@ async def apply_colors(requests: List[ColorRequest]) -> Dict[str, Any]:
         spreadsheet_id = url_id_match.group(1) if url_id_match else DEFAULT_SPREADSHEET_URL
         gid = int(url_gid_match.group(1)) if url_gid_match else None
 
-        validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
         spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
         sheet = _resolve_sheet(spreadsheet, gid)
         sheet_props = sheet["properties"]
@@ -486,7 +560,7 @@ def _normalize_color(cell_data: Optional[Dict[str, Any]]) -> Color:
 
 
 def _fetch_colors_for_range(
-    validator: GoogleSheetsFormulaValidator,
+    validator: Any,
     spreadsheet_id: str,
     sheet_title: str,
     range_ref: str,
@@ -632,7 +706,8 @@ def _build_repeat_cell(sheet_id: int, row: int, col: int, color: Color) -> Dict[
 @app.post("/tools/restore")
 async def restore_colors(request: RestoreRequest) -> Dict[str, Any]:
     """Restore colors from Supabase snapshot."""
-    if GoogleSheetsFormulaValidator is None or DEFAULT_CREDENTIALS_PATH is None:
+    validator = _get_sheets_service()
+    if validator is None:
         raise HTTPException(
             status_code=503,
             detail="Color tools are not available on this deployment.",
@@ -651,7 +726,6 @@ async def restore_colors(request: RestoreRequest) -> Dict[str, Any]:
         spreadsheet_id = url_id_match.group(1) if url_id_match else DEFAULT_SPREADSHEET_URL
         gid = int(url_gid_match.group(1)) if url_gid_match else None
 
-        validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
         spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
         sheets = spreadsheet.get("sheets", [])
         if not sheets:
@@ -720,7 +794,7 @@ async def restore_colors(request: RestoreRequest) -> Dict[str, Any]:
 # * ============================================================================
 
 def _fetch_cell_values(
-    validator: GoogleSheetsFormulaValidator,
+    validator: Any,
     spreadsheet_id: str,
     sheet_title: str,
     cell_locations: List[str],
@@ -761,7 +835,7 @@ def _snapshot_cell_values(
     gid: Optional[int],
     sheet_title: str,
     cell_locations: List[str],
-    validator: GoogleSheetsFormulaValidator,
+    validator: Any,
 ) -> str:
     """Snapshot current cell values to Supabase before update."""
     snapshot_batch_id = str(uuid.uuid4())
@@ -870,13 +944,14 @@ async def update_cells(request: UpdateCellsRequest) -> Dict[str, Any]:
     )
 
     # Check if tools are available
-    if GoogleSheetsFormulaValidator is None or DEFAULT_CREDENTIALS_PATH is None:
+    validator = _get_sheets_service()
+    if validator is None:
         logger.error(
             "503 Service Unavailable: Cell update tools not available",
             extra={
                 "validator_available": GoogleSheetsFormulaValidator is not None,
                 "credentials_available": DEFAULT_CREDENTIALS_PATH is not None,
-                "credentials_path": os.getenv("DEFAULT_CREDENTIALS_PATH", "(not set)"),
+                "credentials_path": str(DEFAULT_CREDENTIALS_PATH) if DEFAULT_CREDENTIALS_PATH else "(not set)",
             }
         )
         raise HTTPException(
@@ -904,9 +979,6 @@ async def update_cells(request: UpdateCellsRequest) -> Dict[str, Any]:
             f"Parsed spreadsheet URL: id={spreadsheet_id}, gid={gid}",
             extra={"spreadsheet_id": spreadsheet_id, "gid": gid}
         )
-
-        logger.debug("Initializing GoogleSheetsFormulaValidator")
-        validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
 
         logger.debug(f"Fetching spreadsheet metadata for {spreadsheet_id}")
         spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
@@ -1094,7 +1166,8 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
         "cell_locations": ["A1", "B2"]  // Optional: restore only specific cells
     }
     """
-    if GoogleSheetsFormulaValidator is None or DEFAULT_CREDENTIALS_PATH is None:
+    validator = _get_sheets_service()
+    if validator is None:
         raise HTTPException(
             status_code=503,
             detail="Cell restore tools are not available on this deployment.",
@@ -1148,7 +1221,6 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
         if not spreadsheet_id:
             raise ValueError("Snapshot missing spreadsheet_id.")
 
-        validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
         spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
         sheets = spreadsheet.get("sheets", [])
         if not sheets:
