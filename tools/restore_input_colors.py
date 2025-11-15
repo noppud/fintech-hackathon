@@ -190,9 +190,10 @@ def _build_repeat_cell(sheet_id: int, row: int, col: int, color: Color) -> Dict[
                         "green": float(color["green"]),
                         "blue": float(color["blue"]),
                     },
-                }
+                },
+                "note": "",  # * Clear any existing note/comment on this cell
             },
-            "fields": "userEnteredFormat.backgroundColor",
+            "fields": "userEnteredFormat.backgroundColor,note",
         }
     }
 
