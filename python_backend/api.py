@@ -944,11 +944,8 @@ def _build_repeat_cell(sheet_id: int, row: int, col: int, color: Color) -> Dict[
 @app.post("/tools/restore")
 async def restore_colors(request: RestoreRequest) -> Dict[str, Any]:
     """Restore colors from Supabase snapshot."""
-    logger.info(f"Restore colors request: snapshot_batch_id={request.snapshot_batch_id}, cell_locations={request.cell_locations}")
-
     validator = _get_sheets_service()
     if validator is None:
-        logger.error("Color tools not available")
         raise HTTPException(
             status_code=503,
             detail="Color tools are not available on this deployment.",
@@ -956,30 +953,18 @@ async def restore_colors(request: RestoreRequest) -> Dict[str, Any]:
 
     try:
         snapshot_batch_id = request.snapshot_batch_id
-
-        if not snapshot_batch_id:
-            logger.error("Missing snapshot_batch_id in request")
-            raise HTTPException(status_code=400, detail="Missing snapshot_batch_id")
-
         expected_cells = None
         if request.cell_locations:
             expected_cells = set()
             for range_ref in request.cell_locations:
-                try:
-                    cells = _expand_range(range_ref)
-                    expected_cells.update(cells)
-                    logger.debug(f"Expanded range '{range_ref}' to {len(cells)} cell(s)")
-                except Exception as exc:
-                    logger.warning(f"Failed to expand range '{range_ref}': {exc}")
-                    # Continue with other ranges
+                expected_cells.update(_expand_range(range_ref))
 
         # First, fetch snapshot rows to get spreadsheet_id and gid from the snapshot data
         logger.info(f"Fetching snapshot rows for batch_id: {snapshot_batch_id}")
 
         # We need to fetch without filtering by spreadsheet_id/gid first
         if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-            logger.error("Supabase not configured")
-            raise HTTPException(status_code=500, detail="Supabase not configured")
+            raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured.")
 
         params = {
             "select": "cell,red,green,blue,spreadsheet_id,gid",
@@ -1002,23 +987,15 @@ async def restore_colors(request: RestoreRequest) -> Dict[str, Any]:
         try:
             with urllib.request.urlopen(req) as response:
                 if response.status != 200:
-                    logger.error(f"Supabase returned status {response.status}")
                     raise RuntimeError(f"Unexpected Supabase status: {response.status}")
                 payload = response.read()
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="ignore")
-            logger.error(f"Supabase HTTP error {exc.status}: {body}")
-            raise HTTPException(status_code=500, detail=f"Supabase fetch failed: {exc.status}")
+            raise RuntimeError(f"Supabase fetch failed: {exc.status} {body}") from exc
 
         sample_rows = json.loads(payload)
         if not isinstance(sample_rows, list) or not sample_rows:
-            logger.warning(f"No snapshot found for batch_id: {snapshot_batch_id}")
-            # Return success but with message that snapshot doesn't exist
-            return {
-                "status": "success",
-                "message": f"No snapshot found for batch id '{snapshot_batch_id}' (already restored or never created)",
-                "count": 0,
-            }
+            raise ValueError(f"No snapshot rows found for batch id '{snapshot_batch_id}'.")
 
         # Extract spreadsheet_id and gid from first row
         first_row = sample_rows[0]
@@ -1026,131 +1003,73 @@ async def restore_colors(request: RestoreRequest) -> Dict[str, Any]:
         gid = first_row.get("gid")
 
         if not spreadsheet_id:
-            logger.error("Snapshot missing spreadsheet_id")
-            raise HTTPException(status_code=500, detail="Snapshot is missing spreadsheet_id")
+            raise ValueError("Snapshot is missing spreadsheet_id")
 
         logger.info(f"Extracted from snapshot: spreadsheet_id={spreadsheet_id}, gid={gid}")
 
         # Now fetch the full spreadsheet and sheet info
-        try:
-            spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
-            logger.debug(f"Fetched spreadsheet {spreadsheet_id}")
-        except Exception as exc:
-            logger.error(f"Failed to fetch spreadsheet {spreadsheet_id}: {exc}")
-            raise HTTPException(status_code=500, detail=f"Failed to fetch spreadsheet: {exc}")
-
+        spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
         sheets = spreadsheet.get("sheets", [])
         if not sheets:
-            logger.error("No sheets available in spreadsheet")
-            raise HTTPException(status_code=500, detail="No sheets available in spreadsheet")
+            raise ValueError("No sheets available in spreadsheet.")
 
         sheet = None
         if gid is None:
             sheet = sheets[0]
-            logger.debug(f"Using first sheet (no gid provided)")
         else:
             for candidate in sheets:
                 if candidate["properties"].get("sheetId") == gid:
                     sheet = candidate
-                    logger.debug(f"Found sheet with gid={gid}")
                     break
         if sheet is None:
-            logger.error(f"No sheet found with gid={gid}")
-            raise HTTPException(status_code=404, detail=f"No sheet found with gid={gid}")
+            raise ValueError(f"No sheet found with gid={gid}.")
 
         sheet_props = sheet["properties"]
         sheet_id = sheet_props["sheetId"]
         sheet_title = sheet_props["title"]
 
-        logger.info(f"Restoring colors on sheet '{sheet_title}' (id={sheet_id})")
-
         # Now fetch all snapshot rows for this spreadsheet
-        try:
-            snapshot_rows = _fetch_snapshot_rows(snapshot_batch_id, spreadsheet_id, gid)
-            logger.debug(f"Fetched {len(snapshot_rows) if snapshot_rows else 0} snapshot rows")
-        except Exception as exc:
-            logger.error(f"Failed to fetch snapshot rows: {exc}")
-            raise HTTPException(status_code=500, detail=f"Failed to fetch snapshot rows: {exc}")
-
+        snapshot_rows = _fetch_snapshot_rows(snapshot_batch_id, spreadsheet_id, gid)
         if not snapshot_rows:
-            logger.warning(f"No snapshot rows found for batch_id={snapshot_batch_id}")
-            return {
-                "status": "success",
-                "message": f"No snapshot rows found for batch id '{snapshot_batch_id}' (already restored)",
-                "count": 0,
-            }
+            raise ValueError(f"No snapshot rows found for batch id '{snapshot_batch_id}'.")
 
         if expected_cells is not None:
-            actual_cells = {row["cell"] for row in snapshot_rows if "cell" in row}
-            missing = expected_cells - actual_cells
+            missing = expected_cells - {row["cell"] for row in snapshot_rows}
             if missing:
-                logger.warning(f"Snapshot missing {len(missing)} cell(s): {sorted(list(missing)[:5])}")
-                # Don't fail, just restore what we have
+                raise ValueError(f"Snapshot missing {len(missing)} cell(s): {sorted(missing)}")
 
         requests: List[Dict[str, Any]] = []
-        skipped = 0
         for row in snapshot_rows:
             cell = row.get("cell")
             if not isinstance(cell, str):
-                logger.warning("Snapshot row missing 'cell' field, skipping")
-                skipped += 1
-                continue
-
+                raise ValueError("Snapshot row missing 'cell'.")
             red = row.get("red")
             green = row.get("green")
             blue = row.get("blue")
             if not all(isinstance(v, (int, float)) for v in (red, green, blue)):
-                logger.warning(f"Snapshot row for '{cell}' has invalid color values, skipping")
-                skipped += 1
-                continue
-
-            try:
-                row_index, col_index = _parse_cell(cell)
-                requests.append(
-                    _build_repeat_cell(
-                        sheet_id,
-                        row_index,
-                        col_index,
-                        {"red": float(red), "green": float(green), "blue": float(blue)},
-                    )
+                raise ValueError(f"Snapshot row for '{cell}' has invalid color values.")
+            row_index, col_index = _parse_cell(cell)
+            requests.append(
+                _build_repeat_cell(
+                    sheet_id,
+                    row_index,
+                    col_index,
+                    {"red": float(red), "green": float(green), "blue": float(blue)},
                 )
-            except Exception as exc:
-                logger.warning(f"Failed to parse cell '{cell}': {exc}")
-                skipped += 1
-                continue
+            )
 
-        if not requests:
-            logger.warning("No valid cells to restore")
-            return {
-                "status": "success",
-                "message": "No valid cells found in snapshot to restore",
-                "count": 0,
-            }
-
-        logger.info(f"Restoring {len(requests)} cell(s), skipped {skipped}")
-
-        try:
-            validator.service.spreadsheets().batchUpdate(
-                spreadsheetId=spreadsheet_id,
-                body={"requests": requests},
-            ).execute()
-            logger.info(f"✓ Successfully restored {len(requests)} cell color(s)")
-        except Exception as exc:
-            logger.error(f"Failed to execute batchUpdate: {exc}")
-            raise HTTPException(status_code=500, detail=f"Failed to update spreadsheet: {exc}")
+        validator.service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": requests},
+        ).execute()
 
         return {
             "status": "success",
             "message": f"Restored {len(requests)} cell color(s) on '{sheet_title}' from snapshot batch.",
             "count": len(requests),
         }
-
-    except HTTPException:
-        # Re-raise HTTPException as-is
-        raise
     except Exception as e:
-        logger.error(f"Unexpected error in restore_colors: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # * ============================================================================
@@ -1516,11 +1435,8 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
         "cell_locations": ["A1", "B2"]  // Optional: restore only specific cells
     }
     """
-    logger.info(f"Restore cell values request: snapshot_batch_id={request.snapshot_batch_id}, cell_locations={request.cell_locations}")
-
     validator = _get_sheets_service()
     if validator is None:
-        logger.error("Cell restore tools not available")
         raise HTTPException(
             status_code=503,
             detail="Cell restore tools are not available on this deployment.",
@@ -1529,17 +1445,10 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
     try:
         snapshot_batch_id = request.snapshot_batch_id
 
-        if not snapshot_batch_id:
-            logger.error("Missing snapshot_batch_id in request")
-            raise HTTPException(status_code=400, detail="Missing snapshot_batch_id")
-
         if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-            logger.error("Supabase not configured")
-            raise HTTPException(status_code=500, detail="Supabase not configured")
+            raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured.")
 
         # Fetch snapshot rows from Supabase
-        logger.info(f"Fetching cell value snapshot for batch_id: {snapshot_batch_id}")
-
         params = {
             "select": "cell,value,spreadsheet_id,gid",
             "snapshot_batch_id": f"eq.{snapshot_batch_id}",
@@ -1557,42 +1466,21 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
             },
         )
 
-        try:
-            with urllib.request.urlopen(req) as response:
-                if response.status != 200:
-                    logger.error(f"Supabase returned status {response.status}")
-                    raise RuntimeError(f"Unexpected Supabase status: {response.status}")
-                payload = response.read()
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="ignore")
-            logger.error(f"Supabase HTTP error {exc.status}: {body}")
-            raise HTTPException(status_code=500, detail=f"Supabase fetch failed: {exc.status}")
+        with urllib.request.urlopen(req) as response:
+            if response.status != 200:
+                raise RuntimeError(f"Unexpected Supabase status: {response.status}")
+            payload = response.read()
 
         snapshot_rows = json.loads(payload)
         if not isinstance(snapshot_rows, list) or not snapshot_rows:
-            logger.warning(f"No snapshot found for batch_id: {snapshot_batch_id}")
-            return {
-                "status": "success",
-                "message": f"No snapshot found for batch id '{snapshot_batch_id}' (already restored or never created)",
-                "count": 0,
-            }
-
-        logger.debug(f"Found {len(snapshot_rows)} snapshot rows")
+            raise ValueError(f"No snapshot found for batch id '{snapshot_batch_id}'.")
 
         # Filter by cell_locations if provided
         if request.cell_locations:
             expected_cells = set(request.cell_locations)
-            original_count = len(snapshot_rows)
             snapshot_rows = [row for row in snapshot_rows if row.get("cell") in expected_cells]
-            logger.debug(f"Filtered from {original_count} to {len(snapshot_rows)} rows by cell_locations")
-
             if not snapshot_rows:
-                logger.warning("No matching cells found in snapshot after filtering")
-                return {
-                    "status": "success",
-                    "message": "No matching cells found in snapshot",
-                    "count": 0,
-                }
+                raise ValueError("No matching cells found in snapshot.")
 
         # Get spreadsheet info from first row
         first_row = snapshot_rows[0]
@@ -1600,21 +1488,12 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
         gid = first_row.get("gid")
 
         if not spreadsheet_id:
-            logger.error("Snapshot missing spreadsheet_id")
-            raise HTTPException(status_code=500, detail="Snapshot missing spreadsheet_id")
+            raise ValueError("Snapshot missing spreadsheet_id.")
 
-        logger.info(f"Restoring values to spreadsheet_id={spreadsheet_id}, gid={gid}")
-
-        try:
-            spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
-        except Exception as exc:
-            logger.error(f"Failed to fetch spreadsheet {spreadsheet_id}: {exc}")
-            raise HTTPException(status_code=500, detail=f"Failed to fetch spreadsheet: {exc}")
-
+        spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
         sheets = spreadsheet.get("sheets", [])
         if not sheets:
-            logger.error("No sheets available in spreadsheet")
-            raise HTTPException(status_code=500, detail="No sheets available in spreadsheet")
+            raise ValueError("No sheets available in spreadsheet.")
 
         # Find sheet by gid
         sheet = None
@@ -1625,27 +1504,20 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
                 if candidate["properties"].get("sheetId") == gid:
                     sheet = candidate
                     break
-
         if sheet is None:
-            logger.error(f"No sheet found with gid={gid}")
-            raise HTTPException(status_code=404, detail=f"No sheet found with gid={gid}")
+            raise ValueError(f"No sheet found with gid={gid}.")
 
         sheet_props = sheet["properties"]
         sheet_title = sheet_props["title"]
 
-        logger.info(f"Restoring to sheet '{sheet_title}'")
-
         # Build batch update
         batch_data: List[Dict[str, Any]] = []
-        skipped = 0
 
         for row in snapshot_rows:
             cell = row.get("cell")
             value_json = row.get("value")
 
             if not cell:
-                logger.warning("Snapshot row missing 'cell' field, skipping")
-                skipped += 1
                 continue
 
             # Deserialize value
@@ -1655,7 +1527,6 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
                 try:
                     value = json.loads(value_json)
                 except json.JSONDecodeError:
-                    logger.debug(f"Value for {cell} is not JSON, using as string")
                     value = value_json  # Fallback to string
 
             cell_range = f"'{sheet_title}'!{cell}"
@@ -1675,18 +1546,8 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
                 "values": value_to_write,
             })
 
-        if not batch_data:
-            logger.warning("No valid cells to restore")
-            return {
-                "status": "success",
-                "message": "No valid cells found in snapshot to restore",
-                "count": 0,
-            }
-
-        logger.info(f"Restoring {len(batch_data)} cell value(s), skipped {skipped}")
-
         # Execute batch restore
-        try:
+        if batch_data:
             validator.service.spreadsheets().values().batchUpdate(
                 spreadsheetId=spreadsheet_id,
                 body={
@@ -1694,10 +1555,6 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
                     "data": batch_data,
                 },
             ).execute()
-            logger.info(f"✓ Successfully restored {len(batch_data)} cell value(s)")
-        except Exception as exc:
-            logger.error(f"Failed to execute batchUpdate: {exc}")
-            raise HTTPException(status_code=500, detail=f"Failed to update spreadsheet: {exc}")
 
         return {
             "status": "success",
@@ -1705,9 +1562,145 @@ async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
             "count": len(batch_data),
         }
 
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# * ============================================================================
+# * Extension Installation Endpoints
+# * ============================================================================
+
+class InstallExtensionRequest(BaseModel):
+    """Request to install extension to a spreadsheet."""
+    spreadsheet_id: str
+    user_email: Optional[str] = None
+
+
+@app.post("/extension/check-access")
+async def check_sheet_access(request: InstallExtensionRequest) -> Dict[str, Any]:
+    """
+    Check if the service account has access to the spreadsheet.
+
+    The user must share the spreadsheet with the service account email first.
+
+    Example request:
+    {
+        "spreadsheet_id": "1abc...xyz"
+    }
+
+    Returns:
+    {
+        "hasAccess": true,
+        "spreadsheetId": "1abc...xyz",
+        "name": "My Spreadsheet",
+        "serviceAccountEmail": "service@project.iam.gserviceaccount.com"
+    }
+    """
+    try:
+        from .apps_script_installer import AppsScriptInstaller
+
+        installer = AppsScriptInstaller()
+        access_info = installer.check_sheet_access(request.spreadsheet_id)
+        access_info["serviceAccountEmail"] = installer.get_service_account_email()
+
+        return access_info
+
+    except Exception as e:
+        logger.error(f"Error checking sheet access: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/extension/install")
+async def install_extension(request: InstallExtensionRequest) -> Dict[str, Any]:
+    """
+    Install the Mangler AI Copilot extension to a Google Sheet.
+
+    Prerequisites:
+    - User must have shared the spreadsheet with the service account
+    - Service account must have Editor permissions
+
+    Example request:
+    {
+        "spreadsheet_id": "1abc...xyz",
+        "user_email": "user@mangler.finance"  // Optional, for tracking
+    }
+
+    Returns:
+    {
+        "success": true,
+        "scriptId": "abc123",
+        "spreadsheetId": "1abc...xyz",
+        "message": "Extension installed successfully"
+    }
+    """
+    try:
+        from .apps_script_installer import AppsScriptInstaller
+
+        # Load the extension files
+        backend_root = Path(__file__).resolve().parent
+        app_script_dir = backend_root.parent / "app-script"
+
+        code_gs_path = app_script_dir / "Code.gs"
+        sidebar_html_path = app_script_dir / "Sidebar.html"
+
+        if not code_gs_path.exists() or not sidebar_html_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail="Extension files not found. Please ensure Code.gs and Sidebar.html exist in app-script directory."
+            )
+
+        with open(code_gs_path, "r") as f:
+            code_gs_content = f.read()
+
+        with open(sidebar_html_path, "r") as f:
+            sidebar_html_content = f.read()
+
+        # Install the extension
+        installer = AppsScriptInstaller()
+        result = installer.install_extension(
+            spreadsheet_id=request.spreadsheet_id,
+            code_gs_content=code_gs_content,
+            sidebar_html_content=sidebar_html_content,
+        )
+
+        # Log installation for analytics (if user_email provided)
+        if request.user_email and result.get("success"):
+            logger.info(
+                f"Extension installed successfully for user {request.user_email} on spreadsheet {request.spreadsheet_id}",
+                extra={
+                    "user_email": request.user_email,
+                    "spreadsheet_id": request.spreadsheet_id,
+                    "script_id": result.get("scriptId"),
+                }
+            )
+
+        return result
+
     except HTTPException:
-        # Re-raise HTTPException as-is
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in restore_cell_values: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+        logger.error(f"Error installing extension: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/extension/service-account-email")
+async def get_service_account_email() -> Dict[str, str]:
+    """
+    Get the service account email address for sheet sharing.
+
+    Returns:
+    {
+        "email": "service-account@project.iam.gserviceaccount.com"
+    }
+    """
+    try:
+        from .apps_script_installer import AppsScriptInstaller
+
+        installer = AppsScriptInstaller()
+        email = installer.get_service_account_email()
+
+        return {"email": email}
+
+    except Exception as e:
+        logger.error(f"Error getting service account email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
