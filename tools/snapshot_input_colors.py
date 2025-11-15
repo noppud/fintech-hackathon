@@ -1,5 +1,6 @@
 """
 # * Snapshot background colors for cells listed in an input JSON and store them in Supabase.
+# * The input JSON must include a shared 'url' pointing to the target sheet/tab.
 """
 
 import json
@@ -21,7 +22,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from tools.google_sheets import (
     DEFAULT_CREDENTIALS_PATH,
-    DEFAULT_SPREADSHEET_URL,
     GoogleSheetsFormulaValidator,
 )
 
@@ -50,21 +50,41 @@ def _parse_args() -> Path:
     return input_path
 
 
-def _load_cell_ranges(input_path: Path) -> List[str]:
+def _load_cell_ranges(input_path: Path) -> Tuple[List[str], str]:
     payload = json.loads(input_path.read_text())
     potential_errors = payload.get("potential_errors")
     if not isinstance(potential_errors, list) or not potential_errors:
         raise ValueError("Input JSON must contain a non-empty 'potential_errors' list.")
 
     ranges: List[str] = []
+    sheet_url: Optional[str] = None
     for idx, entry in enumerate(potential_errors):
         if not isinstance(entry, dict):
             raise ValueError(f"Entry #{idx} is not an object.")
         cell_location = entry.get("cell_location")
+        url = entry.get("url")
         if not isinstance(cell_location, str) or not cell_location.strip():
             raise ValueError(f"Entry #{idx} missing 'cell_location'.")
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError(f"Entry #{idx} missing 'url'.")
+        normalized_url = url.strip()
+        if sheet_url is None:
+            sheet_url = normalized_url
+        elif normalized_url != sheet_url:
+            raise ValueError("All entries in input JSON must share the same 'url'.")
         ranges.append(cell_location.strip().upper())
-    return ranges
+    if sheet_url is None:
+        raise ValueError("Input JSON must specify a 'url' for each entry.")
+    return ranges, sheet_url
+def _parse_sheet_url(sheet_url: str) -> Tuple[str, Optional[int]]:
+    if not isinstance(sheet_url, str) or not sheet_url.strip():
+        raise ValueError("Sheet URL must be a non-empty string.")
+    sheet_url = sheet_url.strip()
+    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
+    url_gid_match = re.search(r"[?&]gid=(\d+)", sheet_url)
+    spreadsheet_id = url_id_match.group(1) if url_id_match else sheet_url
+    gid = int(url_gid_match.group(1)) if url_gid_match else None
+    return spreadsheet_id, gid
 
 
 def _column_label(index: int) -> str:
@@ -216,12 +236,9 @@ def _post_to_supabase(rows: List[Dict[str, Any]]) -> None:
 
 def main() -> None:
     input_path = _parse_args()
-    ranges = _load_cell_ranges(input_path)
+    ranges, sheet_url = _load_cell_ranges(input_path)
 
-    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", DEFAULT_SPREADSHEET_URL)
-    url_gid_match = re.search(r"[?&]gid=(\d+)", DEFAULT_SPREADSHEET_URL)
-    spreadsheet_id = url_id_match.group(1) if url_id_match else DEFAULT_SPREADSHEET_URL
-    gid = int(url_gid_match.group(1)) if url_gid_match else None
+    spreadsheet_id, gid = _parse_sheet_url(sheet_url)
 
     validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
     spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
@@ -261,6 +278,7 @@ def main() -> None:
                     "red": float(color["red"]),
                     "green": float(color["green"]),
                     "blue": float(color["blue"]),
+                    "sheet_url": sheet_url,
                 }
             )
 

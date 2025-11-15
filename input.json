@@ -1,14 +1,16 @@
 {
     "potential_errors": [
-        {
-            "cell_location": "A1:B10",
-            "message": "A1:B10 all values should be formulas but some are not",
-            "color": "#9933FF"
-        },
-        {
-            "cell_location": "A7",
-            "message": "A7 is a formula that references itself",
-            "color": "#FF0000"
-        }
+      {
+        "cell_location": "A1:B10",
+        "message": "A1:B10 all values should be formulas but some are not",
+        "color": "#9933FF",
+        "url": "https://docs.google.com/spreadsheets/d/1xAA7d_3SUnEI3cLsya8Z8RRl3QghWMmsYOyrQXjDP08/edit?gid=107308474#gid=107308474"
+      },
+      {
+        "cell_location": "A7",
+        "message": "A7 is a formula that references itself",
+        "color": "#FF0000",
+        "url": "https://docs.google.com/spreadsheets/d/1xAA7d_3SUnEI3cLsya8Z8RRl3QghWMmsYOyrQXjDP08/edit?gid=107308474#gid=107308474"
+      }
     ]
 }

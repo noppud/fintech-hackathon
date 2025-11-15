@@ -1,5 +1,6 @@
 """
 # * Restore background colors for cells from a Supabase snapshot batch.
+# * When an input JSON is provided, it must include a shared 'url' for the target sheet/tab.
 """
 
 import json
@@ -54,21 +55,43 @@ def _parse_args() -> Tuple[str, Optional[Path]]:
     return snapshot_batch_id, json_path
 
 
-def _load_expected_cells(json_path: Path) -> List[str]:
+def _load_expected_cells(json_path: Path) -> Tuple[List[str], str]:
     payload = json.loads(json_path.read_text())
     potential_errors = payload.get("potential_errors")
     if not isinstance(potential_errors, list) or not potential_errors:
         raise ValueError("Input JSON must contain a non-empty 'potential_errors' list.")
 
     cells: List[str] = []
+    sheet_url: Optional[str] = None
     for idx, entry in enumerate(potential_errors):
         if not isinstance(entry, dict):
             raise ValueError(f"Entry #{idx} is not an object.")
         cell_location = entry.get("cell_location")
+        url = entry.get("url")
         if not isinstance(cell_location, str) or not cell_location.strip():
             raise ValueError(f"Entry #{idx} missing 'cell_location'.")
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError(f"Entry #{idx} missing 'url'.")
+        normalized_url = url.strip()
+        if sheet_url is None:
+            sheet_url = normalized_url
+        elif normalized_url != sheet_url:
+            raise ValueError("All entries in input JSON must share the same 'url'.")
         cells.extend(_expand_range(cell_location.strip().upper()))
-    return cells
+    if sheet_url is None:
+        raise ValueError("Input JSON must specify a 'url' for each entry.")
+    return cells, sheet_url
+
+
+def _parse_sheet_url(sheet_url: str) -> Tuple[str, Optional[int]]:
+    if not isinstance(sheet_url, str) or not sheet_url.strip():
+        raise ValueError("Sheet URL must be a non-empty string.")
+    sheet_url = sheet_url.strip()
+    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
+    url_gid_match = re.search(r"[?&]gid=(\d+)", sheet_url)
+    spreadsheet_id = url_id_match.group(1) if url_id_match else sheet_url
+    gid = int(url_gid_match.group(1)) if url_gid_match else None
+    return spreadsheet_id, gid
 
 
 def _column_index(label: str) -> int:
@@ -137,7 +160,7 @@ def _fetch_snapshot_rows(
     gid: Optional[int],
 ) -> List[Dict[str, Any]]:
     params = {
-        "select": "cell,red,green,blue",
+        "select": "cell,red,green,blue,sheet_url",
         "snapshot_batch_id": f"eq.{snapshot_batch_id}",
         "spreadsheet_id": f"eq.{spreadsheet_id}",
     }
@@ -202,13 +225,15 @@ def main() -> None:
     snapshot_batch_id, json_path = _parse_args()
 
     expected_cells = None
+    sheet_url = None
     if json_path:
-        expected_cells = set(_load_expected_cells(json_path))
+        cells, sheet_url = _load_expected_cells(json_path)
+        expected_cells = set(cells)
 
-    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", DEFAULT_SPREADSHEET_URL)
-    url_gid_match = re.search(r"[?&]gid=(\d+)", DEFAULT_SPREADSHEET_URL)
-    spreadsheet_id = url_id_match.group(1) if url_id_match else DEFAULT_SPREADSHEET_URL
-    gid = int(url_gid_match.group(1)) if url_gid_match else None
+    if sheet_url is None:
+        sheet_url = DEFAULT_SPREADSHEET_URL
+
+    spreadsheet_id, gid = _parse_sheet_url(sheet_url)
 
     validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
     spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
@@ -234,6 +259,17 @@ def main() -> None:
     snapshot_rows = _fetch_snapshot_rows(snapshot_batch_id, spreadsheet_id, gid)
     if not snapshot_rows:
         raise ValueError(f"No snapshot rows found for batch id '{snapshot_batch_id}'.")
+
+    if json_path:
+        mismatched_urls = [
+            row.get("sheet_url")
+            for row in snapshot_rows
+            if row.get("sheet_url") and row.get("sheet_url") != sheet_url
+        ]
+        if mismatched_urls:
+            raise ValueError(
+                "Snapshot rows belong to a different sheet_url than the provided input JSON."
+            )
 
     if expected_cells is not None:
         missing = expected_cells - {row["cell"] for row in snapshot_rows}

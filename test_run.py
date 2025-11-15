@@ -36,6 +36,7 @@ def main() -> None:
     input_path = PROJECT_ROOT / "input.json"
     if not input_path.exists():
         raise FileNotFoundError(f"No input file found at {input_path}")
+    # * input.json must include a shared 'url' field for all entries.
 
     python_exec = sys.executable
     snapshot_script = str(TOOLS_DIR / "snapshot_input_colors.py")

@@ -1,5 +1,6 @@
 """
 # * Apply background colors to spreadsheet ranges based on JSON input.
+# * The input JSON must include a shared 'url' pointing to the target sheet/tab.
 """
 
 import json
@@ -17,7 +18,6 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from tools.google_sheets import (
     DEFAULT_CREDENTIALS_PATH,
-    DEFAULT_SPREADSHEET_URL,
     GoogleSheetsFormulaValidator,
 )
 
@@ -36,25 +36,34 @@ def _parse_args() -> Path:
     return path
 
 
-def _load_payload(path: Path) -> List[Dict[str, Any]]:
+def _load_payload(path: Path) -> Tuple[List[Dict[str, Any]], str]:
     payload = json.loads(path.read_text())
     potential_errors = payload.get("potential_errors")
     if not isinstance(potential_errors, list) or not potential_errors:
         raise ValueError("Input must include a non-empty 'potential_errors' list.")
 
     normalized: List[Dict[str, Any]] = []
+    sheet_url: Optional[str] = None
     for idx, item in enumerate(potential_errors):
         if not isinstance(item, dict):
             raise ValueError(f"Entry #{idx} is not an object.")
         cell_location = item.get("cell_location")
         message = item.get("message")
         color = item.get("color")
+        url = item.get("url")
         if not isinstance(cell_location, str) or not cell_location.strip():
             raise ValueError(f"Entry #{idx} missing 'cell_location'.")
         if not isinstance(message, str) or not message.strip():
             raise ValueError(f"Entry #{idx} missing 'message'.")
         if not isinstance(color, str) or not color.strip():
             raise ValueError(f"Entry #{idx} missing 'color'.")
+        if not isinstance(url, str) or not url.strip():
+            raise ValueError(f"Entry #{idx} missing 'url'.")
+        normalized_url = url.strip()
+        if sheet_url is None:
+            sheet_url = normalized_url
+        elif normalized_url != sheet_url:
+            raise ValueError("All entries in the input JSON must share the same 'url'.")
         normalized.append(
             {
                 "cell_location": cell_location.strip().upper(),
@@ -62,7 +71,20 @@ def _load_payload(path: Path) -> List[Dict[str, Any]]:
                 "color": _hex_color_to_rgb(color.strip()),
             }
         )
-    return normalized
+    if sheet_url is None:
+        raise ValueError("Input JSON must provide a 'url' for each entry.")
+    return normalized, sheet_url
+
+
+def _parse_sheet_url(sheet_url: str) -> Tuple[str, Optional[int]]:
+    if not isinstance(sheet_url, str) or not sheet_url.strip():
+        raise ValueError("Sheet URL must be a non-empty string.")
+    sheet_url = sheet_url.strip()
+    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", sheet_url)
+    url_gid_match = re.search(r"[?&]gid=(\d+)", sheet_url)
+    spreadsheet_id = url_id_match.group(1) if url_id_match else sheet_url
+    gid = int(url_gid_match.group(1)) if url_gid_match else None
+    return spreadsheet_id, gid
 
 
 def _hex_color_to_rgb(value: str) -> Color:
@@ -152,12 +174,9 @@ def _build_request(sheet_id: int, cell_location: str, color: Color, note: str) -
 
 def main() -> None:
     input_path = _parse_args()
-    entries = _load_payload(input_path)
+    entries, sheet_url = _load_payload(input_path)
 
-    url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", DEFAULT_SPREADSHEET_URL)
-    url_gid_match = re.search(r"[?&]gid=(\d+)", DEFAULT_SPREADSHEET_URL)
-    spreadsheet_id = url_id_match.group(1) if url_id_match else DEFAULT_SPREADSHEET_URL
-    gid = int(url_gid_match.group(1)) if url_gid_match else None
+    spreadsheet_id, gid = _parse_sheet_url(sheet_url)
 
     validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
     spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
