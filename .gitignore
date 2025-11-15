@@ -1,4 +1,27 @@
-venv/
-.env
+# OS / editor
+.DS_Store
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Env/config
+*.env
+*.env.local
+
+# Google service account keys (never commit secrets)
+python_backend/service-account.json
+service-account.json
+
+# Google OAuth credentials (never commit)
 client_secret_*.json
 token.json
+credentials.json
+
+python_backend/__pycache__/
+python_backend/__pycache__/*
+python_backend/__pycache__/api.cpython-314.pyc
+*.ipynb
+*.md

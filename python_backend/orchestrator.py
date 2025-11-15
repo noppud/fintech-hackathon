@@ -223,6 +223,63 @@ class AgentOrchestrator:
             content=self._summarize_creation_result(result),
           )
         )
+
+      elif tool_name == "update_cells":
+        import requests
+
+        # Get updates from arguments
+        updates = args.get("updates")
+        if not updates:
+          raise ValueError("Missing updates array")
+
+        # Get sheet context
+        spreadsheet_id = normalize_spreadsheet_id(
+          args.get("spreadsheetId")
+          or sheet_context.spreadsheetId
+          or ""
+        )
+        if not spreadsheet_id:
+          raise ValueError("Missing spreadsheet ID")
+
+        sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle or "Sheet1"
+        create_snapshot = args.get("create_snapshot", True)
+
+        # Call the update_cells API endpoint
+        api_url = "http://localhost:8000/tools/update_cells"
+        payload = {
+          "updates": updates,
+          "spreadsheet_id": spreadsheet_id,
+          "sheet_title": sheet_title,
+          "create_snapshot": create_snapshot,
+        }
+
+        try:
+          response = requests.post(api_url, json=payload, timeout=30)
+          response.raise_for_status()
+          result = response.json()
+        except requests.RequestException as exc:
+          raise RuntimeError(f"Failed to call update_cells API: {exc}")
+
+        # Create tool response messages
+        messages.append(
+          ChatMessage(
+            id=str(uuid.uuid4()),
+            role="tool",
+            content=result.get("message", "Cell update completed"),
+            metadata={
+              "toolName": "update_cells",
+              "payload": result,
+            },
+          )
+        )
+        messages.append(
+          ChatMessage(
+            id=str(uuid.uuid4()),
+            role="assistant",
+            content=self._summarize_update_cells_result(result),
+          )
+        )
+
       else:
         raise ValueError(f"Unknown tool: {tool_name}")
     except Exception as exc:
@@ -327,5 +384,40 @@ class AgentOrchestrator:
     summary += f"The spreadsheet includes {len(sheets)} sheet{'s' if len(sheets) != 1 else ''} with structured columns and example data. "
     if plan.get("documentation"):
       summary += "A documentation sheet with usage instructions has also been added."
+    return summary
+
+  @staticmethod
+  def _summarize_update_cells_result(result: Dict[str, Any]) -> str:
+    status = result.get("status")
+    count = result.get("count", 0)
+    failed_updates = result.get("failed_updates") or []
+    snapshot_id = result.get("snapshot_batch_id")
+
+    if status == "error" or (count == 0 and failed_updates):
+      return (
+        f"I encountered errors while updating cells. "
+        f"{len(failed_updates)} update{'s' if len(failed_updates) != 1 else ''} failed. "
+        "Please check the error details or try a different approach."
+      )
+
+    if status == "partial_success":
+      summary = (
+        f"I successfully updated {count} cell{'s' if count != 1 else ''}, "
+        f"but {len(failed_updates)} update{'s' if len(failed_updates) != 1 else ''} failed.\n\n"
+      )
+      if failed_updates:
+        summary += "Failed updates:\n"
+        for fail in failed_updates[:3]:  # Show first 3 failures
+          cell_loc = fail.get("cell_location", "unknown")
+          error = fail.get("error", "unknown error")
+          summary += f"- {cell_loc}: {error}\n"
+        if len(failed_updates) > 3:
+          summary += f"... and {len(failed_updates) - 3} more\n"
+    else:
+      summary = f"Successfully updated {count} cell{'s' if count != 1 else ''}."
+
+    if snapshot_id:
+      summary += f"\n\nYou can undo these changes if needed (snapshot ID: {snapshot_id[:8]}...)."
+
     return summary
 

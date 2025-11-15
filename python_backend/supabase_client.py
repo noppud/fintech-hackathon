@@ -1,17 +1,25 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
-from supabase import Client, create_client
+if TYPE_CHECKING:
+    from supabase import Client
+
+try:
+    from supabase import Client, create_client
+except ImportError:
+    # Supabase is optional - if not installed, all functions return None
+    Client = None  # type: ignore
+    create_client = None  # type: ignore
 
 from .llm import _load_env_from_local_files
 
 
-_supabase_client: Optional[Client] = None
+_supabase_client: Optional["Client"] = None
 
 
-def get_supabase_client() -> Optional[Client]:
+def get_supabase_client() -> Optional["Client"]:
   """
   Lazily create and cache a Supabase client, if configured.
 
@@ -19,6 +27,10 @@ def get_supabase_client() -> Optional[Client]:
   local .env-style files using the same mechanism as the LLM client.
   """
   global _supabase_client
+
+  # If supabase package is not installed, return None
+  if create_client is None or Client is None:
+    return None
 
   if _supabase_client is not None:
     return _supabase_client

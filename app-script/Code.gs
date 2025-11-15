@@ -1,5 +1,11 @@
 function onOpen() {
   try {
+    // Check if we're in a context where UI is available
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    if (!spreadsheet) {
+      return; // No active spreadsheet, can't create UI
+    }
+
     var ui = SpreadsheetApp.getUi();
     if (ui) {
       ui.createMenu("AI Copilot")
@@ -7,15 +13,66 @@ function onOpen() {
         .addToUi();
     }
   } catch (e) {
-    // UI not available in this context (e.g., API execution)
-    Logger.log("Cannot create menu: " + e.toString());
+    // UI not available in this context (e.g., script editor, API execution, or trigger)
+    // Silently ignore - this is expected in some contexts
+    // Only log if it's an unexpected error
+    if (e.toString().indexOf("getUi") === -1) {
+      Logger.log("Unexpected error in onOpen: " + e.toString());
+    }
   }
 }
 
 function showCopilotSidebar() {
-  var html =
-    HtmlService.createHtmlOutputFromFile("Sidebar").setTitle("Sheet Copilot");
-  SpreadsheetApp.getUi().showSidebar(html);
+  try {
+    // Get UI first
+    var ui = SpreadsheetApp.getUi();
+    if (!ui) {
+      Logger.log("UI not available in this context");
+      return;
+    }
+
+    // Create HTML output with proper settings
+    var html = HtmlService.createHtmlOutputFromFile("Sidebar")
+      .setTitle("Sheet Copilot")
+      .setWidth(400)
+      .setSandboxMode(HtmlService.SandboxMode.IFRAME);
+
+    ui.showSidebar(html);
+  } catch (e) {
+    Logger.log("Error showing sidebar: " + e.toString());
+    Logger.log("Error details: " + JSON.stringify(e));
+
+    // Try to show an error message if possible
+    try {
+      var ui = SpreadsheetApp.getUi();
+      if (ui) {
+        ui.alert(
+          "Error opening sidebar: " +
+            e.toString() +
+            "\n\nPlease check the execution log for more details."
+        );
+      }
+    } catch (e2) {
+      // Can't show alert either, just log
+      Logger.log("Cannot show error alert: " + e2.toString());
+    }
+  }
+}
+
+/**
+ * Test function to verify HTML file can be loaded.
+ * Run this from the script editor to debug HTML loading issues.
+ */
+function testSidebarHtml() {
+  try {
+    var html = HtmlService.createHtmlOutputFromFile("Sidebar");
+    Logger.log("HTML file loaded successfully");
+    Logger.log("HTML content length: " + html.getContent().length);
+    return "Success: HTML file loaded. Length: " + html.getContent().length;
+  } catch (e) {
+    Logger.log("Error loading HTML: " + e.toString());
+    return "Error: " + e.toString();
+  }
 }
 
 /**
@@ -384,18 +441,13 @@ function callColorApi(colorPayload) {
 }
 
 /**
- * Called when user clicks "Fix with AI" or "Ignore" on an issue card.
+ * Called when user clicks "Ignore" on an issue card.
  * Restores the original cell colors by calling the restore endpoint.
  * @param {string} cellLocation - The cell location (e.g., "A7", "3:6")
- * @param {string} action - The action taken ("fix" or "ignore")
  * @return {Object} Success status
  */
-function revertIssueColor(cellLocation, action) {
-  Logger.log(
-    "Reverting colors for issue at %s with action %s",
-    cellLocation,
-    action
-  );
+function ignoreIssue(cellLocation) {
+  Logger.log("Ignoring issue at %s (reverting colors)", cellLocation);
 
   try {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
@@ -409,7 +461,6 @@ function revertIssueColor(cellLocation, action) {
     var snapshotBatchId = null;
 
     if (responseJson) {
-      // Parse the saved response
       try {
         var savedResponse = JSON.parse(responseJson);
         snapshotBatchId = savedResponse.snapshot_batch_id;
@@ -421,7 +472,7 @@ function revertIssueColor(cellLocation, action) {
       }
     }
 
-    // Fallback to old snapshot_batch_id storage for backward compatibility
+    // Fallback to old snapshot_batch_id storage
     if (!snapshotBatchId) {
       var snapshotKey = "snapshot_" + spreadsheetId + "_" + cellLocation;
       snapshotBatchId = properties.getProperty(snapshotKey);
@@ -434,12 +485,10 @@ function revertIssueColor(cellLocation, action) {
       return {
         success: false,
         error: "No snapshot found for this cell location",
-        cellLocation: cellLocation,
-        action: action,
       };
     }
 
-    // Call restore endpoint
+    // Call restore endpoint to revert colors
     var restoreResponse = callRestoreApi(snapshotBatchId, [cellLocation]);
 
     if (restoreResponse && restoreResponse.status === "success") {
@@ -451,25 +500,183 @@ function revertIssueColor(cellLocation, action) {
       Logger.log("Successfully restored colors for " + cellLocation);
       return {
         success: true,
-        cellLocation: cellLocation,
-        action: action,
+        message: "Issue ignored, colors restored",
       };
     } else {
       Logger.log("Restore API returned non-success status");
       return {
         success: false,
-        error: "Restore API returned non-success status",
-        cellLocation: cellLocation,
-        action: action,
+        error: "Failed to restore colors",
       };
     }
   } catch (e) {
-    Logger.log("Error reverting issue color: " + e.toString());
+    Logger.log("Error ignoring issue: " + e.toString());
     return {
       success: false,
       error: e.toString(),
-      cellLocation: cellLocation,
-      action: action,
+    };
+  }
+}
+
+/**
+ * Called when user clicks "Fix with AI" on an issue card.
+ * Sends the issue to the AI to determine and apply fixes.
+ * @param {Object} issueData - The full issue object with all metadata
+ * @return {Object} Result with success, message, and snapshot_id for undo
+ */
+function fixIssueWithAI(issueData) {
+  Logger.log("Fixing issue with AI: " + JSON.stringify(issueData));
+
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var activeSheet = spreadsheet.getActiveSheet();
+    var spreadsheetUrl = spreadsheet.getUrl();
+    var sheetTitle = activeSheet.getName();
+    var sessionId = getOrCreateSessionId(spreadsheet.getId());
+
+    // Build a specific message for the AI about this issue
+    var userMessage =
+      "Fix this specific issue:\n\n" +
+      "Location: " +
+      issueData.cell_location +
+      "\n" +
+      "Severity: " +
+      issueData.severity +
+      "\n" +
+      "Issue: " +
+      issueData.title +
+      "\n" +
+      "Description: " +
+      issueData.description +
+      "\n";
+
+    if (issueData.suggestedFix) {
+      userMessage += "Suggested fix: " + issueData.suggestedFix + "\n";
+    }
+
+    userMessage +=
+      "\nPlease use the update_cells tool to apply the appropriate fix for this issue.";
+
+    // Call the chat API with the fix request
+    var apiResponse = callChatApi(
+      userMessage,
+      spreadsheetUrl,
+      sheetTitle,
+      sessionId
+    );
+
+    // Parse the response to look for update_cells tool result
+    var parsed = parseApiResponse(apiResponse);
+    var updateCellsResult = extractUpdateCellsResult(apiResponse);
+
+    if (updateCellsResult && updateCellsResult.snapshot_batch_id) {
+      // Store the snapshot ID for undo
+      var spreadsheetId = spreadsheet.getId();
+      var properties = PropertiesService.getScriptProperties();
+      var fixSnapshotKey =
+        "fix_snapshot_" + spreadsheetId + "_" + issueData.cell_location;
+      properties.setProperty(fixSnapshotKey, updateCellsResult.snapshot_batch_id);
+
+      // Now revert the color highlight
+      ignoreIssue(issueData.cell_location);
+
+      Logger.log("AI fix applied successfully");
+      return {
+        success: true,
+        message: parsed.reply || "Fix applied successfully",
+        snapshot_id: updateCellsResult.snapshot_batch_id,
+        cells_updated: updateCellsResult.count || 0,
+      };
+    } else {
+      // AI responded but didn't use update_cells tool
+      return {
+        success: false,
+        message:
+          parsed.reply ||
+          "AI couldn't determine how to fix this issue automatically",
+      };
+    }
+  } catch (e) {
+    Logger.log("Error fixing issue with AI: " + e.toString());
+    return {
+      success: false,
+      error: e.toString(),
+      message: "Error: " + e.toString(),
+    };
+  }
+}
+
+/**
+ * Extract update_cells tool result from API response.
+ * @param {Object} apiResponse - The API response with messages array
+ * @return {Object|null} The update_cells result or null
+ */
+function extractUpdateCellsResult(apiResponse) {
+  if (!apiResponse || !apiResponse.messages) {
+    return null;
+  }
+
+  for (var i = 0; i < apiResponse.messages.length; i++) {
+    var msg = apiResponse.messages[i];
+    if (
+      msg.role === "tool" &&
+      msg.metadata &&
+      msg.metadata.toolName === "update_cells" &&
+      msg.metadata.payload
+    ) {
+      return msg.metadata.payload;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Undo AI-applied fixes for a specific cell location.
+ * @param {string} cellLocation - The cell location to undo
+ * @return {Object} Success status
+ */
+function undoAIFix(cellLocation) {
+  Logger.log("Undoing AI fix for: " + cellLocation);
+
+  try {
+    var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    var spreadsheetId = spreadsheet.getId();
+    var properties = PropertiesService.getScriptProperties();
+
+    var fixSnapshotKey = "fix_snapshot_" + spreadsheetId + "_" + cellLocation;
+    var snapshotBatchId = properties.getProperty(fixSnapshotKey);
+
+    if (!snapshotBatchId) {
+      return {
+        success: false,
+        error: "No undo snapshot found for this fix",
+      };
+    }
+
+    // Call restore_cells endpoint
+    var restoreResponse = callRestoreCellsApi(snapshotBatchId, [cellLocation]);
+
+    if (restoreResponse && restoreResponse.status === "success") {
+      // Remove the snapshot reference
+      properties.deleteProperty(fixSnapshotKey);
+
+      Logger.log("Successfully undid AI fix for " + cellLocation);
+      return {
+        success: true,
+        message: "Fix undone successfully",
+      };
+    } else {
+      return {
+        success: false,
+        error: "Failed to undo fix",
+      };
+    }
+  } catch (e) {
+    Logger.log("Error undoing AI fix: " + e.toString());
+    return {
+      success: false,
+      error: e.toString(),
     };
   }
 }
@@ -522,5 +729,57 @@ function callRestoreApi(snapshotBatchId, cellLocations) {
   } catch (e) {
     Logger.log("Error parsing restore API response: " + e.toString());
     throw new Error("Failed to parse restore API response");
+  }
+}
+
+/**
+ * Calls the restore_cells API endpoint to restore cell values after AI fixes.
+ * @param {string} snapshotBatchId - The snapshot batch ID from update_cells
+ * @param {Array} cellLocations - Array of cell locations to restore (optional)
+ * @return {Object} API response
+ */
+function callRestoreCellsApi(snapshotBatchId, cellLocations) {
+  var apiUrl =
+    "https://fintech-hackathon-production.up.railway.app/tools/restore_cells";
+
+  var payload = {
+    snapshot_batch_id: snapshotBatchId,
+  };
+
+  if (cellLocations && cellLocations.length > 0) {
+    payload.cell_locations = cellLocations;
+  }
+
+  var options = {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      "User-Agent": "insomnia/12.0.0",
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  };
+
+  var response = UrlFetchApp.fetch(apiUrl, options);
+  var responseCode = response.getResponseCode();
+  var responseText = response.getContentText();
+
+  if (responseCode !== 200) {
+    Logger.log(
+      "Restore Cells API Error - Status: " +
+        responseCode +
+        ", Response: " +
+        responseText
+    );
+    throw new Error(
+      "Restore cells API request failed with status " + responseCode
+    );
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (e) {
+    Logger.log("Error parsing restore cells API response: " + e.toString());
+    throw new Error("Failed to parse restore cells API response");
   }
 }

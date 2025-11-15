@@ -413,6 +413,17 @@
         border-color: #bdc1c6;
       }
 
+      .issue-btn-undo {
+        background: #ffffff;
+        color: #ea8600;
+        border: 1px solid #ea8600;
+      }
+
+      .issue-btn-undo:hover:not(:disabled) {
+        background: #fef7e0;
+        border-color: #d77600;
+      }
+
       .issue-btn:disabled {
         opacity: 0.5;
         cursor: default;
@@ -625,36 +636,114 @@
         /* --- Issue button handling --- */
         chatEl.addEventListener("click", function (e) {
           const target = e.target;
-          if (!target.classList.contains("issue-btn")) return;
 
-          const card = target.closest(".issue-card");
+          // Handle fix/ignore buttons
+          if (target.classList.contains("issue-btn")) {
+            handleIssueButton(e.target);
+            return;
+          }
+
+          // Handle undo button
+          if (target.classList.contains("issue-btn-undo")) {
+            handleUndoButton(e.target);
+            return;
+          }
+        });
+
+        function handleIssueButton(button) {
+          const card = button.closest(".issue-card");
           if (!card || card.classList.contains("issue-card--resolved")) return;
 
-          const action = target.dataset.action;
+          const action = button.dataset.action;
           const cellLocation = card.dataset.cellLocation;
+          const issueData = card.dataset.issueData ? JSON.parse(card.dataset.issueData) : null;
           const buttons = card.querySelectorAll(".issue-btn");
           const statusEl = card.querySelector(".issue-status");
+          const actionsEl = card.querySelector(".issue-actions");
 
           buttons.forEach(function (btn) {
             btn.disabled = true;
           });
-          statusEl.textContent = "Working…";
+          statusEl.textContent = action === "fix" ? "Applying AI fix…" : "Ignoring…";
+
+          if (action === "fix") {
+            // Call AI to fix the issue
+            google.script.run
+              .withSuccessHandler(function (result) {
+                if (result && result.success) {
+                  card.classList.add("issue-card--resolved");
+                  statusEl.textContent = result.message || "Fixed with AI";
+
+                  // Add undo button
+                  actionsEl.innerHTML =
+                    '<button type="button" class="issue-btn issue-btn-undo" data-action="undo">' +
+                    "Undo Fix</button>";
+                } else {
+                  buttons.forEach(function (btn) {
+                    btn.disabled = false;
+                  });
+                  statusEl.textContent = result.message || "AI couldn't fix this issue";
+                }
+              })
+              .withFailureHandler(function (err) {
+                buttons.forEach(function (btn) {
+                  btn.disabled = false;
+                });
+                statusEl.textContent =
+                  "Error: " + (err && err.message ? err.message : "Failed to fix");
+              })
+              .fixIssueWithAI(issueData);
+          } else if (action === "ignore") {
+            // Just revert colors
+            google.script.run
+              .withSuccessHandler(function (result) {
+                card.classList.add("issue-card--resolved");
+                statusEl.textContent = "Ignored";
+              })
+              .withFailureHandler(function (err) {
+                buttons.forEach(function (btn) {
+                  btn.disabled = false;
+                });
+                statusEl.textContent =
+                  "Error: " + (err && err.message ? err.message : "Failed to ignore");
+              })
+              .ignoreIssue(cellLocation);
+          }
+        }
+
+        function handleUndoButton(button) {
+          const card = button.closest(".issue-card");
+          if (!card) return;
+
+          const cellLocation = card.dataset.cellLocation;
+          const statusEl = card.querySelector(".issue-status");
+
+          button.disabled = true;
+          statusEl.textContent = "Undoing…";
 
           google.script.run
-            .withSuccessHandler(function () {
-              card.classList.add("issue-card--resolved");
-              statusEl.textContent = "Done (" + action + ")";
+            .withSuccessHandler(function (result) {
+              if (result && result.success) {
+                card.classList.remove("issue-card--resolved");
+                statusEl.textContent = "Fix undone";
+
+                // Restore original buttons
+                const actionsEl = card.querySelector(".issue-actions");
+                actionsEl.innerHTML =
+                  '<button type="button" class="issue-btn issue-btn-fix" data-action="fix">Fix with AI</button>' +
+                  '<button type="button" class="issue-btn issue-btn-ignore" data-action="ignore">Ignore</button>';
+              } else {
+                button.disabled = false;
+                statusEl.textContent = "Undo failed: " + (result.error || "Unknown error");
+              }
             })
             .withFailureHandler(function (err) {
-              buttons.forEach(function (btn) {
-                btn.disabled = false;
-              });
+              button.disabled = false;
               statusEl.textContent =
-                "Error: " +
-                (err && err.message ? err.message : "Unable to revert colors.");
+                "Undo error: " + (err && err.message ? err.message : "Unknown error");
             })
-            .revertIssueColor(cellLocation, action);
-        });
+            .undoAIFix(cellLocation);
+        }
 
         /* --- Chat rendering helpers --- */
 
@@ -691,6 +780,16 @@
             card.className = "issue-card";
             card.dataset.cellLocation =
               issue.cell_location || issue.range?.a1Notation || "";
+
+            // Store full issue data for AI fix
+            card.dataset.issueData = JSON.stringify({
+              cell_location: issue.cell_location || issue.range?.a1Notation || "",
+              title: issue.title || issue.message || "Issue",
+              description: issue.description || "",
+              severity: issue.severity || "medium",
+              category: issue.category || "",
+              suggestedFix: issue.suggestedFix || "",
+            });
 
             const safeTitle = escapeHtml(
               issue.title || issue.message || "Issue"

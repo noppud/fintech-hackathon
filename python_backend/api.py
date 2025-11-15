@@ -81,6 +81,30 @@ class RestoreRequest(BaseModel):
     cell_locations: Optional[List[str]] = None
 
 
+class CellUpdate(BaseModel):
+    """Single cell update request."""
+    cell_location: str  # A1 notation, e.g., "A1" or "B2:C5"
+    value: Any  # New value - can be string, number, boolean, formula, or null
+    is_formula: bool = False  # Set to True if value is a formula (e.g., "=SUM(A1:A10)")
+
+
+class UpdateCellsRequest(BaseModel):
+    """Request to update cell values in a spreadsheet."""
+    updates: List[CellUpdate]
+    spreadsheet_id: Optional[str] = None  # Optional: defaults to env SPREADSHEET_URL
+    sheet_title: str = "Sheet1"  # Sheet name, defaults to Sheet1
+    create_snapshot: bool = True  # Whether to snapshot current values for undo
+
+
+class UpdateCellsResponse(BaseModel):
+    """Response from cell update operation."""
+    status: str
+    message: str
+    count: int
+    snapshot_batch_id: Optional[str] = None
+    failed_updates: Optional[List[Dict[str, str]]] = None
+
+
 # * ============================================================================
 # * Chat Endpoint
 # * ============================================================================
@@ -579,5 +603,410 @@ async def restore_colors(request: RestoreRequest) -> Dict[str, Any]:
             "message": f"Restored {len(requests)} cell color(s) on '{sheet_title}' from snapshot batch.",
             "count": len(requests),
         }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# * ============================================================================
+# * Cell Update Tool Endpoint
+# * ============================================================================
+
+def _fetch_cell_values(
+    validator: GoogleSheetsFormulaValidator,
+    spreadsheet_id: str,
+    sheet_title: str,
+    cell_locations: List[str],
+) -> Dict[str, Any]:
+    """Fetch current values for cells to snapshot before update."""
+    values_by_cell: Dict[str, Any] = {}
+
+    for cell_loc in cell_locations:
+        try:
+            sheet_range = f"'{sheet_title}'!{cell_loc}"
+            response = validator.service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id,
+                range=sheet_range,
+                valueRenderOption="UNFORMATTED_VALUE",
+            ).execute()
+
+            cell_values = response.get("values", [])
+
+            # Handle single cell vs range
+            if ":" in cell_loc:
+                # It's a range - store the full 2D array
+                values_by_cell[cell_loc] = cell_values
+            else:
+                # Single cell - extract the value
+                if cell_values and cell_values[0]:
+                    values_by_cell[cell_loc] = cell_values[0][0]
+                else:
+                    values_by_cell[cell_loc] = None
+        except Exception:
+            # Cell may be empty or out of bounds - treat as None
+            values_by_cell[cell_loc] = None
+
+    return values_by_cell
+
+
+def _snapshot_cell_values(
+    spreadsheet_id: str,
+    gid: Optional[int],
+    sheet_title: str,
+    cell_locations: List[str],
+    validator: GoogleSheetsFormulaValidator,
+) -> str:
+    """Snapshot current cell values to Supabase before update."""
+    snapshot_batch_id = str(uuid.uuid4())
+    values_by_cell = _fetch_cell_values(validator, spreadsheet_id, sheet_title, cell_locations)
+
+    rows_to_insert: List[Dict[str, Any]] = []
+    for cell_loc, value in values_by_cell.items():
+        rows_to_insert.append({
+            "snapshot_batch_id": snapshot_batch_id,
+            "spreadsheet_id": spreadsheet_id,
+            "gid": gid,
+            "cell": cell_loc,
+            "value": json.dumps(value) if value is not None else None,
+            "snapshot_type": "cell_value",
+        })
+
+    if rows_to_insert:
+        _post_value_snapshot_to_supabase(rows_to_insert)
+
+    return snapshot_batch_id
+
+
+def _post_value_snapshot_to_supabase(rows: List[Dict[str, Any]]) -> None:
+    """Send cell value snapshot rows to Supabase."""
+    if not rows:
+        raise ValueError("No rows to persist to Supabase.")
+
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured.")
+
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/cell_value_snapshots"
+    request = urllib.request.Request(
+        url,
+        method="POST",
+        data=json.dumps(rows).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "Prefer": "resolution=merge-duplicates",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request) as response:
+            if response.status not in (200, 201, 204):
+                raise RuntimeError(f"Unexpected Supabase status: {response.status}")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"Supabase insert failed: {exc.status} {body}") from exc
+
+
+@app.post("/tools/update_cells")
+async def update_cells(request: UpdateCellsRequest) -> Dict[str, Any]:
+    """
+    Update cell values in a Google Spreadsheet with automatic snapshotting.
+
+    Supports:
+    - Batch updates (multiple cells at once)
+    - Formulas and values
+    - Single cells or ranges
+    - Automatic snapshot for undo capability
+    - Robust validation and error handling
+
+    Example request:
+    {
+        "updates": [
+            {"cell_location": "A1", "value": "Hello"},
+            {"cell_location": "B2", "value": 42},
+            {"cell_location": "C3", "value": "=SUM(A1:B2)", "is_formula": true},
+            {"cell_location": "D4:E5", "value": "Batch"}
+        ],
+        "sheet_title": "Sheet1",
+        "create_snapshot": true
+    }
+    """
+    if GoogleSheetsFormulaValidator is None or DEFAULT_CREDENTIALS_PATH is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Cell update tools are not available on this deployment.",
+        )
+
+    try:
+        if not request.updates:
+            raise ValueError("No cell updates provided.")
+
+        # Parse spreadsheet ID and gid
+        spreadsheet_url = request.spreadsheet_id or DEFAULT_SPREADSHEET_URL
+        if not spreadsheet_url:
+            raise ValueError("No spreadsheet URL/ID provided and no default configured.")
+
+        url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", spreadsheet_url)
+        url_gid_match = re.search(r"[?&]gid=(\d+)", spreadsheet_url)
+        spreadsheet_id = url_id_match.group(1) if url_id_match else spreadsheet_url
+        gid = int(url_gid_match.group(1)) if url_gid_match else None
+
+        validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
+        spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
+
+        # Resolve sheet - either by gid or by title
+        sheet = None
+        sheets = spreadsheet.get("sheets", [])
+        if not sheets:
+            raise ValueError("No sheets available in spreadsheet.")
+
+        # First try to find by title
+        for candidate in sheets:
+            if candidate["properties"]["title"] == request.sheet_title:
+                sheet = candidate
+                break
+
+        # If not found by title and gid is provided, try gid
+        if sheet is None and gid is not None:
+            for candidate in sheets:
+                if candidate["properties"].get("sheetId") == gid:
+                    sheet = candidate
+                    break
+
+        # If still not found, use first sheet and warn
+        if sheet is None:
+            sheet = sheets[0]
+            actual_title = sheet["properties"]["title"]
+            if actual_title != request.sheet_title:
+                print(f"Warning: Sheet '{request.sheet_title}' not found, using '{actual_title}'")
+
+        sheet_props = sheet["properties"]
+        sheet_title = sheet_props["title"]
+
+        # STEP 1: Snapshot current values if requested
+        snapshot_batch_id = None
+        if request.create_snapshot:
+            cell_locations = [update.cell_location for update in request.updates]
+            snapshot_batch_id = _snapshot_cell_values(
+                spreadsheet_id,
+                gid,
+                sheet_title,
+                cell_locations,
+                validator,
+            )
+
+        # STEP 2: Apply updates using batch API
+        batch_data: List[Dict[str, Any]] = []
+        failed_updates: List[Dict[str, str]] = []
+
+        for update in request.updates:
+            try:
+                cell_range = f"'{sheet_title}'!{update.cell_location}"
+
+                # Determine value input option
+                value_input_option = "USER_ENTERED" if update.is_formula else "RAW"
+
+                # Handle None/null values
+                if update.value is None:
+                    value_to_write = [[""]]
+                # Handle range updates (fill entire range with same value)
+                elif ":" in update.cell_location:
+                    start_row, end_row, start_col, end_col = _range_bounds(update.cell_location)
+                    num_rows = end_row - start_row + 1
+                    num_cols = end_col - start_col + 1
+                    value_to_write = [[update.value] * num_cols for _ in range(num_rows)]
+                else:
+                    # Single cell
+                    value_to_write = [[update.value]]
+
+                batch_data.append({
+                    "range": cell_range,
+                    "values": value_to_write,
+                })
+
+            except Exception as e:
+                failed_updates.append({
+                    "cell_location": update.cell_location,
+                    "error": str(e),
+                })
+
+        # Execute batch update if we have valid updates
+        if batch_data:
+            validator.service.spreadsheets().values().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "valueInputOption": "USER_ENTERED",  # This allows formulas
+                    "data": batch_data,
+                },
+            ).execute()
+
+        success_count = len(batch_data)
+        total_count = len(request.updates)
+
+        if failed_updates:
+            status = "partial_success" if success_count > 0 else "error"
+            message = f"Updated {success_count}/{total_count} cells on '{sheet_title}'. {len(failed_updates)} failed."
+        else:
+            status = "success"
+            message = f"Updated {success_count} cell(s) on '{sheet_title}'."
+
+        response_data = {
+            "status": status,
+            "message": message,
+            "count": success_count,
+        }
+
+        if snapshot_batch_id:
+            response_data["snapshot_batch_id"] = snapshot_batch_id
+
+        if failed_updates:
+            response_data["failed_updates"] = failed_updates
+
+        return response_data
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/tools/restore_cells")
+async def restore_cell_values(request: RestoreRequest) -> Dict[str, Any]:
+    """
+    Restore cell values from a Supabase snapshot.
+
+    This endpoint restores cells to their original values before an update_cells operation.
+    Use the snapshot_batch_id returned from the update_cells endpoint.
+
+    Example request:
+    {
+        "snapshot_batch_id": "550e8400-e29b-41d4-a716-446655440000",
+        "cell_locations": ["A1", "B2"]  // Optional: restore only specific cells
+    }
+    """
+    if GoogleSheetsFormulaValidator is None or DEFAULT_CREDENTIALS_PATH is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Cell restore tools are not available on this deployment.",
+        )
+
+    try:
+        snapshot_batch_id = request.snapshot_batch_id
+
+        if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+            raise ValueError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured.")
+
+        # Fetch snapshot rows from Supabase
+        params = {
+            "select": "cell,value,spreadsheet_id,gid",
+            "snapshot_batch_id": f"eq.{snapshot_batch_id}",
+        }
+        query = urllib.parse.urlencode(params, doseq=True)
+        url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/cell_value_snapshots?{query}"
+
+        req = urllib.request.Request(
+            url,
+            method="GET",
+            headers={
+                "apikey": SUPABASE_SERVICE_KEY,
+                "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+                "Accept": "application/json",
+            },
+        )
+
+        with urllib.request.urlopen(req) as response:
+            if response.status != 200:
+                raise RuntimeError(f"Unexpected Supabase status: {response.status}")
+            payload = response.read()
+
+        snapshot_rows = json.loads(payload)
+        if not isinstance(snapshot_rows, list) or not snapshot_rows:
+            raise ValueError(f"No snapshot found for batch id '{snapshot_batch_id}'.")
+
+        # Filter by cell_locations if provided
+        if request.cell_locations:
+            expected_cells = set(request.cell_locations)
+            snapshot_rows = [row for row in snapshot_rows if row.get("cell") in expected_cells]
+            if not snapshot_rows:
+                raise ValueError("No matching cells found in snapshot.")
+
+        # Get spreadsheet info from first row
+        first_row = snapshot_rows[0]
+        spreadsheet_id = first_row.get("spreadsheet_id")
+        gid = first_row.get("gid")
+
+        if not spreadsheet_id:
+            raise ValueError("Snapshot missing spreadsheet_id.")
+
+        validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
+        spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
+        sheets = spreadsheet.get("sheets", [])
+        if not sheets:
+            raise ValueError("No sheets available in spreadsheet.")
+
+        # Find sheet by gid
+        sheet = None
+        if gid is None:
+            sheet = sheets[0]
+        else:
+            for candidate in sheets:
+                if candidate["properties"].get("sheetId") == gid:
+                    sheet = candidate
+                    break
+        if sheet is None:
+            raise ValueError(f"No sheet found with gid={gid}.")
+
+        sheet_props = sheet["properties"]
+        sheet_title = sheet_props["title"]
+
+        # Build batch update
+        batch_data: List[Dict[str, Any]] = []
+
+        for row in snapshot_rows:
+            cell = row.get("cell")
+            value_json = row.get("value")
+
+            if not cell:
+                continue
+
+            # Deserialize value
+            if value_json is None:
+                value = None
+            else:
+                try:
+                    value = json.loads(value_json)
+                except json.JSONDecodeError:
+                    value = value_json  # Fallback to string
+
+            cell_range = f"'{sheet_title}'!{cell}"
+
+            # Handle different value types
+            if value is None:
+                value_to_write = [[""]]
+            elif isinstance(value, list):
+                # It was a range - restore the full 2D array
+                value_to_write = value
+            else:
+                # Single cell value
+                value_to_write = [[value]]
+
+            batch_data.append({
+                "range": cell_range,
+                "values": value_to_write,
+            })
+
+        # Execute batch restore
+        if batch_data:
+            validator.service.spreadsheets().values().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "valueInputOption": "USER_ENTERED",
+                    "data": batch_data,
+                },
+            ).execute()
+
+        return {
+            "status": "success",
+            "message": f"Restored {len(batch_data)} cell value(s) on '{sheet_title}' from snapshot.",
+            "count": len(batch_data),
+        }
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
