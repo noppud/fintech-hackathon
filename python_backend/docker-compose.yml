@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  python-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Required environment variables
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-anthropic/claude-3.5-sonnet}
+
+      # Optional OpenRouter settings
+      - OPENROUTER_SITE_URL=${OPENROUTER_SITE_URL:-}
+      - OPENROUTER_SITE_NAME=${OPENROUTER_SITE_NAME:-}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-}
+
+      # Optional Google service account
+      - GOOGLE_SERVICE_ACCOUNT_FILE=${GOOGLE_SERVICE_ACCOUNT_FILE:-}
+
+      # Optional Supabase configuration
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+
+    # Mount .env file if it exists
+    env_file:
+      - .env
+
+    # Optional: mount service account file if using Google Sheets
+    # Uncomment and adjust path as needed
+    # volumes:
+    #   - ./service-account.json:/app/service-account.json:ro
+
+    restart: unless-stopped
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
