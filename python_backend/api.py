@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import os
 import re
@@ -231,6 +232,33 @@ async def logging_middleware(request: Request, call_next):
 
         # Re-raise to let FastAPI handle it
         raise
+
+
+# * ============================================================================
+# * Root & Health Check Endpoints
+# * ============================================================================
+
+@app.get("/")
+async def root():
+    """Root endpoint - returns API info."""
+    return {
+        "name": "Google Sheets Copilot API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "chat": "POST /chat",
+            "detect_issues": "POST /chat (use detect_issues tool)",
+            "color": "POST /tools/color",
+            "restore": "POST /tools/restore",
+            "update_cells": "POST /tools/update_cells",
+            "restore_cells": "POST /tools/restore_cells",
+        }
+    }
+
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {"status": "healthy", "timestamp": _dt.datetime.utcnow().isoformat() + "Z"}
 
 
 # * ============================================================================

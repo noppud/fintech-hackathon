@@ -239,7 +239,8 @@ class AgentOrchestrator:
         )
 
       elif tool_name == "update_cells":
-        import requests
+        # Import here to avoid circular imports
+        from .api import update_cells as update_cells_api, UpdateCellsRequest
 
         # Get updates from arguments
         updates = args.get("updates")
@@ -258,21 +259,24 @@ class AgentOrchestrator:
         sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle or "Sheet1"
         create_snapshot = args.get("create_snapshot", True)
 
-        # Call the update_cells API endpoint
-        api_url = "https://api.sheetmangler.com/tools/update_cells"
-        payload = {
-          "updates": updates,
-          "spreadsheet_id": spreadsheet_id,
-          "sheet_title": sheet_title,
-          "create_snapshot": create_snapshot,
-        }
+        # Call the update_cells function directly (internal call, no HTTP)
+        request = UpdateCellsRequest(
+          updates=updates,
+          spreadsheet_id=spreadsheet_id,
+          sheet_title=sheet_title,
+          create_snapshot=create_snapshot,
+        )
 
         try:
-          response = requests.post(api_url, json=payload, timeout=30)
-          response.raise_for_status()
-          result = response.json()
-        except requests.RequestException as exc:
-          raise RuntimeError(f"Failed to call update_cells API: {exc}")
+          # Call async function - we're already in an async context
+          import asyncio
+          if asyncio.iscoroutinefunction(update_cells_api):
+            result = await update_cells_api(request)
+          else:
+            result = update_cells_api(request)
+        except Exception as exc:
+          logger.error(f"update_cells failed: {str(exc)}", exc_info=True)
+          raise RuntimeError(f"Failed to execute update_cells: {exc}")
 
         # Create tool response messages
         messages.append(
