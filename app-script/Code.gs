@@ -34,7 +34,7 @@ function showCopilotSidebar() {
     // Create HTML output with proper settings
     var html = HtmlService.createHtmlOutputFromFile("Sidebar")
       .setTitle("Sheet Copilot")
-      .setWidth(400)
+      .setWidth(800) // Much wider sidebar
       .setSandboxMode(HtmlService.SandboxMode.IFRAME);
 
     ui.showSidebar(html);
@@ -111,11 +111,13 @@ function handleUserMessage(userMessage) {
     // Get spreadsheet context
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var activeSheet = spreadsheet.getActiveSheet();
-    var spreadsheetUrl = spreadsheet.getUrl();
+    var spreadsheetId = spreadsheet.getId();
+    var activeSheetGid = activeSheet.getSheetId();
+    var spreadsheetUrl = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/edit?gid=" + activeSheetGid;
     var sheetTitle = activeSheet.getName();
 
     // Get or create session ID for this spreadsheet
-    var sessionId = getOrCreateSessionId(spreadsheet.getId());
+    var sessionId = getOrCreateSessionId(spreadsheetId);
 
     // Make the API call
     var apiResponse = callChatApi(
@@ -321,9 +323,13 @@ function highlightIssues(issues) {
 
   var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   var spreadsheetId = spreadsheet.getId();
-  var activeSpreadsheetUrl = spreadsheet.getUrl();
+  var activeSheet = SpreadsheetApp.getActiveSheet();
+  var activeSheetGid = activeSheet.getSheetId();
 
-  Logger.log("Highlighting " + issues.length + " issue(s)");
+  // Build URL with active sheet gid
+  var activeSpreadsheetUrl = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/edit?gid=" + activeSheetGid;
+
+  Logger.log("Highlighting " + issues.length + " issue(s) on sheet gid=" + activeSheetGid);
 
   // Build color payload from issues
   var colorPayload = [];
@@ -484,12 +490,16 @@ function ignoreIssue(cellLocation) {
       var snapshotKey = "snapshot_" + spreadsheetId + "_" + cellLocation;
       snapshotBatchId = properties.getProperty(snapshotKey);
       if (snapshotBatchId) {
-        Logger.log("✓ Found snapshot batch ID (legacy key): " + snapshotBatchId);
+        Logger.log(
+          "✓ Found snapshot batch ID (legacy key): " + snapshotBatchId
+        );
       }
     }
 
     if (!snapshotBatchId) {
-      Logger.log("✗ No snapshot_batch_id found for cell location: " + cellLocation);
+      Logger.log(
+        "✗ No snapshot_batch_id found for cell location: " + cellLocation
+      );
       return {
         success: false,
         error: "No snapshot found for this cell location",
@@ -497,7 +507,9 @@ function ignoreIssue(cellLocation) {
     }
 
     // Call restore endpoint to revert colors
-    Logger.log("Calling restore API with snapshot batch ID: " + snapshotBatchId);
+    Logger.log(
+      "Calling restore API with snapshot batch ID: " + snapshotBatchId
+    );
     var restoreResponse = callRestoreApi(snapshotBatchId, [cellLocation]);
 
     if (restoreResponse && restoreResponse.status === "success") {
@@ -513,7 +525,10 @@ function ignoreIssue(cellLocation) {
         message: "Issue ignored, colors restored",
       };
     } else {
-      Logger.log("✗ Restore API returned non-success status: " + JSON.stringify(restoreResponse));
+      Logger.log(
+        "✗ Restore API returned non-success status: " +
+          JSON.stringify(restoreResponse)
+      );
       return {
         success: false,
         error: "Failed to restore colors",
@@ -543,12 +558,15 @@ function fixIssueWithAI(issueData) {
   try {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var activeSheet = spreadsheet.getActiveSheet();
-    var spreadsheetUrl = spreadsheet.getUrl();
+    var spreadsheetId = spreadsheet.getId();
+    var activeSheetGid = activeSheet.getSheetId();
+    var spreadsheetUrl = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/edit?gid=" + activeSheetGid;
     var sheetTitle = activeSheet.getName();
-    var sessionId = getOrCreateSessionId(spreadsheet.getId());
+    var sessionId = getOrCreateSessionId(spreadsheetId);
 
     Logger.log("Spreadsheet URL: " + spreadsheetUrl);
     Logger.log("Sheet title: " + sheetTitle);
+    Logger.log("Sheet gid: " + activeSheetGid);
     Logger.log("Session ID: " + sessionId);
 
     // Build a specific message for the AI about this issue
