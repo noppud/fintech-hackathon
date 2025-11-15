@@ -154,6 +154,43 @@ curl -X POST http://localhost:8000/tools/restore \
 
 ---
 
+## Endpoint 3: Visualize Formulas vs Values
+
+### `POST /tools/visulize-formulas`
+
+Color every cell with a formula in light green and every hard-coded **numeric** value in light orange.
+
+- No request body; the endpoint uses `SPREADSHEET_URL` to determine the sheet.
+- Automatically snapshots the current colors of **all** affected cells (single snapshot_batch_id covering the whole run).
+
+**Response (Success - 200):**
+```json
+{
+  "status": "success",
+  "message": "Colored 42 cell(s) on 'Sheet1' (formulas → green, values → orange).",
+  "count": 42,
+  "snapshot_batch_id": "4d1d9704-1b80-49b0-95c6-46a48f74a6c9"
+}
+```
+
+**Response (No Cells - 200):**
+```json
+{
+  "status": "no_cells",
+  "message": "No formulas or hard-coded values detected on 'Sheet1'.",
+  "count": 0,
+  "snapshot_batch_id": null
+}
+```
+
+**Example cURL:**
+```bash
+curl -X POST http://localhost:8000/tools/visulize-formulas \
+  -H "Content-Type: application/json"
+```
+
+---
+
 ## Common Use Cases
 
 ### Use Case 1: Color cells with potential errors

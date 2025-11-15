@@ -24,12 +24,9 @@ load_dotenv()
 
 Color = Dict[str, float]
 
-# * Severity colors (0-1 RGB as expected by Sheets API)
-SEVERITY_COLORS: Dict[str, Color] = {
-    "error": {"red": 0.95, "green": 0.45, "blue": 0.45},
-    "warning": {"red": 0.98, "green": 0.8, "blue": 0.45},
-    "info": {"red": 0.7, "green": 0.85, "blue": 0.98},
-}
+# * Visualization colors
+FORMULA_COLOR: Color = {"red": 0.75, "green": 0.92, "blue": 0.75}  # light green
+VALUE_COLOR: Color = {"red": 0.98, "green": 0.8, "blue": 0.5}      # light orange
 
 
 def _resolve_sheet(spreadsheet: Dict[str, Any], gid: Optional[int]) -> Dict[str, Any]:
@@ -98,24 +95,27 @@ def main() -> None:
     sheet_name = sheet["properties"]["title"]
     sheet_id = sheet["properties"]["sheetId"]
 
-    formulas = validator.get_formulas(spreadsheet_id, sheet_name)
-    issues = validator.analyze_formulas(formulas)
-    if not issues:
-        print("No issues detected; nothing to visualize.")
+    cells = validator.get_sheet_cells(spreadsheet_id, sheet_name)
+    targets = [cell for cell in cells if cell.has_formula or cell.has_numeric_constant]
+    if not targets:
+        print("No formulas or hard-coded values detected; nothing to visualize.")
         return
 
     requests: List[Dict[str, Any]] = []
-    for issue in issues:
-        row_idx, col_idx = _cell_to_indices(issue.cell)
-        color = SEVERITY_COLORS.get(issue.severity, SEVERITY_COLORS["info"])
-        requests.append(_build_request(sheet_id, row_idx, col_idx, color, issue.message))
+    for cell in targets:
+        row_idx, col_idx = _cell_to_indices(cell.cell)
+        color = FORMULA_COLOR if cell.has_formula else VALUE_COLOR
+        requests.append(_build_request(sheet_id, row_idx, col_idx, color, ""))
 
     validator.service.spreadsheets().batchUpdate(
         spreadsheetId=spreadsheet_id,
         body={"requests": requests},
     ).execute()
 
-    print(f"Colored {len(requests)} formula issue(s) on '{sheet_name}'.")
+    print(
+        f"Colored {len(requests)} cell(s) on '{sheet_name}' "
+        "(formulas → green, values → orange)."
+    )
 
 
 if __name__ == "__main__":

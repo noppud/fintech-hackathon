@@ -28,6 +28,7 @@ from tools.google_sheets import (
     DEFAULT_CREDENTIALS_PATH,
     DEFAULT_SPREADSHEET_URL,
     GoogleSheetsFormulaValidator,
+    SheetCellState,
 )
 
 # * Environment
@@ -40,6 +41,8 @@ SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 # * Constants
 Color = Dict[str, float]
 WHITE: Color = {"red": 1.0, "green": 1.0, "blue": 1.0}
+FORMULA_COLOR: Color = {"red": 0.75, "green": 0.92, "blue": 0.75}
+VALUE_COLOR: Color = {"red": 0.98, "green": 0.8, "blue": 0.5}
 
 # * Lazy initialization - only create when chat endpoint is called
 store = None
@@ -264,6 +267,75 @@ async def apply_colors(requests: List[ColorRequest]) -> Dict[str, Any]:
             "message": f"Colored {len(batch_requests)} range(s) on '{sheet_props['title']}'.",
             "count": len(batch_requests),
             "snapshot_batch_id": first_snapshot_batch_id,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/tools/visulize-formulas")
+async def visulize_formulas() -> Dict[str, Any]:
+    """Color-code formula issues after snapshotting existing colors."""
+    try:
+        url_id_match = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", DEFAULT_SPREADSHEET_URL)
+        url_gid_match = re.search(r"[?&]gid=(\d+)", DEFAULT_SPREADSHEET_URL)
+        spreadsheet_id = url_id_match.group(1) if url_id_match else DEFAULT_SPREADSHEET_URL
+        gid = int(url_gid_match.group(1)) if url_gid_match else None
+
+        validator = GoogleSheetsFormulaValidator(DEFAULT_CREDENTIALS_PATH)
+        spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
+        sheet = _resolve_sheet(spreadsheet, gid)
+        sheet_props = sheet["properties"]
+        sheet_title = sheet_props["title"]
+        sheet_id = sheet_props["sheetId"]
+
+        cells = validator.get_sheet_cells(spreadsheet_id, sheet_title)
+        targets: List[SheetCellState] = [
+            cell for cell in cells if cell.has_formula or cell.has_numeric_constant
+        ]
+        if not targets:
+            return {
+                "status": "no_cells",
+                "message": f"No formulas or hard-coded values detected on '{sheet_title}'.",
+                "count": 0,
+                "snapshot_batch_id": None,
+            }
+
+        snapshot_batch_id = str(uuid.uuid4())
+        rows_to_insert: List[Dict[str, Any]] = [
+            {
+                "snapshot_batch_id": snapshot_batch_id,
+                "spreadsheet_id": spreadsheet_id,
+                "gid": gid,
+                "cell": cell.cell,
+                "red": float(cell.color["red"]),
+                "green": float(cell.color["green"]),
+                "blue": float(cell.color["blue"]),
+            }
+            for cell in targets
+        ]
+        if rows_to_insert:
+            _post_to_supabase(rows_to_insert)
+
+        requests = [
+            _build_color_request(
+                sheet_id,
+                cell.cell,
+                FORMULA_COLOR if cell.has_formula else VALUE_COLOR,
+                "",
+            )
+            for cell in targets
+        ]
+
+        validator.service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": requests},
+        ).execute()
+
+        return {
+            "status": "success",
+            "message": f"Colored {len(requests)} cell(s) on '{sheet_title}' (formulas → green, values → orange).",
+            "count": len(requests),
+            "snapshot_batch_id": snapshot_batch_id,
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
