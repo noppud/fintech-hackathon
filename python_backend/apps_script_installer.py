@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials as UserCredentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -25,18 +26,29 @@ class AppsScriptInstaller:
     Installs Apps Script extensions to Google Sheets using the Apps Script API.
     """
 
-    def __init__(self, credentials_path: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        credentials_path: Optional[str] = None,
+        user_credentials: Optional[UserCredentials] = None,
+    ) -> None:
         """
         Initialize the Apps Script installer with service account credentials.
 
         Args:
             credentials_path: Path to service account JSON file. If None, uses env vars.
+            user_credentials: Optional OAuth credentials for an authenticated Google user.
         """
         scopes = [
             "https://www.googleapis.com/auth/script.projects",
             "https://www.googleapis.com/auth/drive",
             "https://www.googleapis.com/auth/spreadsheets",
         ]
+
+        if user_credentials is not None:
+            # Assume the provided credentials already have the correct scopes granted.
+            self._script = build("script", "v1", credentials=user_credentials, cache_discovery=False)
+            self._drive = build("drive", "v3", credentials=user_credentials, cache_discovery=False)
+            return
 
         # Try environment variable first (for Railway/hosted environments)
         if credentials_path is None:

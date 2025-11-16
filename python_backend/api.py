@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from google.oauth2.credentials import Credentials as OAuthCredentials
 
 from .backend import PythonChatBackend
 from .logging_config import get_logger
@@ -1818,6 +1819,7 @@ class InstallExtensionRequest(BaseModel):
     """Request to install extension to a spreadsheet."""
     spreadsheet_id: str
     user_email: Optional[str] = None
+    google_access_token: Optional[str] = None
 
 
 @app.post("/extension/check-access")
@@ -1880,6 +1882,16 @@ async def install_extension(request: InstallExtensionRequest) -> Dict[str, Any]:
     try:
         from .apps_script_installer import AppsScriptInstaller
 
+        if not request.google_access_token:
+            raise HTTPException(
+                status_code=400,
+                detail="Missing Google user access token. Please authenticate with Google and try again.",
+            )
+
+        user_credentials = OAuthCredentials(
+            token=request.google_access_token,
+        )
+
         # Load the extension files
         try:
             code_gs_content = _load_app_script_asset("Code.gs")
@@ -1888,7 +1900,7 @@ async def install_extension(request: InstallExtensionRequest) -> Dict[str, Any]:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
         # Install the extension
-        installer = AppsScriptInstaller()
+        installer = AppsScriptInstaller(user_credentials=user_credentials)
         result = installer.install_extension(
             spreadsheet_id=request.spreadsheet_id,
             code_gs_content=code_gs_content,

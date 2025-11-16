@@ -1,9 +1,21 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
+	import { env as publicEnv } from '$env/dynamic/public';
+
 	let { data } = $props();
 
 	const BACKEND_URL = 'https://fintech-hackathon-production.up.railway.app';
 	const SERVICE_ACCOUNT_EMAIL =
 		'googlesheetworker@fintech-hackathon-478313.iam.gserviceaccount.com';
+	const GOOGLE_CLIENT_ID = publicEnv.PUBLIC_GOOGLE_CLIENT_ID || '';
+	const GOOGLE_OAUTH_SCOPE = [
+		'https://www.googleapis.com/auth/script.projects',
+		'https://www.googleapis.com/auth/drive',
+		'https://www.googleapis.com/auth/spreadsheets'
+	].join(' ');
+
+	type GoogleTokenResponse = { access_token?: string; expires_in?: number };
+	type GoogleTokenError = { error?: string; error_description?: string };
 
 	type AccessInfo = {
 		hasAccess: boolean;
@@ -23,6 +35,10 @@
 	let scriptId = $state('');
 	let lastAccessResult = $state<AccessInfo | null>(null);
 	let installFailed = $state(false);
+	let googleAccessToken = $state('');
+	let googleTokenExpiry = $state(0);
+	let googleAuthError = $state('');
+	let googleScriptPromise: Promise<void> | null = null;
 
 	function extractSpreadsheetId(url: string): string | null {
 		// Extract ID from URL like: https://docs.google.com/spreadsheets/d/1abc.../edit
@@ -30,8 +46,89 @@
 		return match ? match[1] : null;
 	}
 
+	async function ensureGoogleIdentityLoaded() {
+		if (!browser) {
+			throw new Error('Google authorization is only available in the browser.');
+		}
+
+		if (window.google?.accounts?.oauth2) {
+			return;
+		}
+
+		if (!googleScriptPromise) {
+			googleScriptPromise = new Promise((resolve, reject) => {
+				const script = document.createElement('script');
+				script.src = 'https://accounts.google.com/gsi/client';
+				script.async = true;
+				script.defer = true;
+				script.onload = () => resolve();
+				script.onerror = () => reject(new Error('Failed to load Google authentication library'));
+				document.head.appendChild(script);
+			});
+		}
+
+		await googleScriptPromise;
+
+		if (!window.google?.accounts?.oauth2) {
+			throw new Error('Google authentication library is unavailable.');
+		}
+	}
+
+	async function requestGoogleAccessToken(forcePrompt = false): Promise<string> {
+		if (!GOOGLE_CLIENT_ID) {
+			throw new Error('Google OAuth client ID is not configured.');
+		}
+
+		const bufferMs = 60_000; // refresh token if expiring in < 60s
+		if (googleAccessToken && googleTokenExpiry - bufferMs > Date.now()) {
+			return googleAccessToken;
+		}
+
+		await ensureGoogleIdentityLoaded();
+
+		return await new Promise((resolve, reject) => {
+			if (!window.google?.accounts?.oauth2) {
+				reject(new Error('Google authentication library is unavailable.'));
+				return;
+			}
+
+			try {
+				const client = window.google.accounts.oauth2.initTokenClient({
+					client_id: GOOGLE_CLIENT_ID,
+					scope: GOOGLE_OAUTH_SCOPE,
+					callback: (response: GoogleTokenResponse) => {
+						if (response && response.access_token) {
+							googleAccessToken = response.access_token;
+							const expiresIn = Number(response.expires_in || 3600);
+							googleTokenExpiry = Date.now() + expiresIn * 1000;
+							resolve(response.access_token);
+						} else {
+							reject(new Error('No access token returned from Google.'));
+						}
+					},
+					error_callback: (error: GoogleTokenError) => {
+						const message = error?.error_description || error?.error || 'Authorization failed.';
+						reject(new Error(message));
+					}
+				});
+
+				if (!client) {
+					reject(new Error('Unable to initialize Google OAuth client.'));
+					return;
+				}
+
+				client.requestAccessToken({
+					prompt: forcePrompt || !googleAccessToken ? 'consent' : ''
+				});
+			} catch (err: any) {
+				reject(err);
+			}
+		});
+	}
+
 	async function handleNext() {
 		errorMessage = '';
+		googleAuthError = '';
 		lastAccessResult = null;
 		installFailed = false;
 
@@ -75,6 +172,18 @@
 		step = 'installing';
 		errorMessage = '';
 		installFailed = false;
+		googleAuthError = '';
+
+		let accessToken: string;
+
+		try {
+			accessToken = await requestGoogleAccessToken();
+		} catch (authError: any) {
+			googleAuthError = authError?.message || 'Google authorization failed.';
+			errorMessage = googleAuthError;
+			step = 'error';
+			return;
+		}
 
 		try {
 			const response = await fetch(`${BACKEND_URL}/extension/install`, {
@@ -82,7 +191,8 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					spreadsheet_id: spreadsheetId,
-					user_email: data?.user?.email
+					user_email: data?.user?.email,
+					google_access_token: accessToken
 				})
 			});
 
@@ -411,17 +521,6 @@
 		margin: 0.75rem 0 0;
 		font-size: 0.85rem;
 		color: #7dd3fc;
-	}
-
-	.share-instructions ol {
-		margin: 0;
-		padding-left: 1.5rem;
-		color: #94a3b8;
-		line-height: 1.8;
-	}
-
-	.share-instructions li {
-		margin-bottom: 0.5rem;
 	}
 
 	.url-input {
