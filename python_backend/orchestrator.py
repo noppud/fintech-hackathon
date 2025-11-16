@@ -393,11 +393,12 @@ class AgentOrchestrator:
         from .visualize_tool import visualize_formulas as viz_fn
         from . import api
 
-        # Check if Google Sheets validator is available
-        if api.GoogleSheetsFormulaValidator is None:
+        # Use the existing fallback mechanism that handles both tools/ and python_backend clients
+        validator = api._get_sheets_service()
+        if validator is None:
           raise RuntimeError(
-            "visualize_formulas tool requires Google Sheets API credentials. "
-            "Please configure GOOGLE_SERVICE_ACCOUNT_FILE or DEFAULT_CREDENTIALS_PATH."
+            "Google Sheets API client is not available. "
+            "Please configure service account credentials."
           )
 
         # Parse the spreadsheet URL to extract ID and gid
@@ -417,9 +418,8 @@ class AgentOrchestrator:
         if not sheet_title:
           raise ValueError("Missing sheet title for visualize_formulas")
 
-        # Create validator and get sheet metadata
+        # Get sheet metadata
         try:
-          validator = api.GoogleSheetsFormulaValidator(api.DEFAULT_CREDENTIALS_PATH)
           spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
 
           # Find the sheet
@@ -436,8 +436,7 @@ class AgentOrchestrator:
 
           # Define Supabase insert function
           def insert_snapshots(rows):
-            from . import api as api_module
-            api_module._post_to_supabase(rows)
+            api._post_to_supabase(rows)
 
           # Call visualization function
           result = viz_fn(
