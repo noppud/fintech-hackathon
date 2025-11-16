@@ -503,7 +503,7 @@ class PROMPTS:
       "🔥 CRITICAL DESIGN PRINCIPLES:\n"
       "1. Keep it SIMPLE: Use only essential columns\n"
       "2. Include NUMERICAL DATA: For financial/hiring/budget sheets, ALWAYS include monetary values (salary, cost, price, revenue)\n"
-      "3. 🔥 MUST INCLUDE FORMULAS: Spreadsheets are useless without formulas!\n"
+      "3. 🔥 TRY TO INCLUDE FORMULAS: Spreadsheets are useless without formulas!\n"
       "   - Add calculated columns (Cost = Headcount × Salary → use formula =C2*D2)\n"
       "   - Add summary rows (Total Cost → use formula =SUM(E2:E10))\n"
       "   - NEVER just hardcode calculated values - USE FORMULAS\n"
@@ -518,7 +518,7 @@ class PROMPTS:
       'exampleRows: [[1, "Engineer", 8000, 8000]]\n'
       "Missing: Cost should be a FORMULA (=C2*D2), not hardcoded 8000!\n\n"
       "✅ GOOD - Has numbers AND formulas:\n"
-      'Columns: ["Month", "Role", "Headcount", "Salary", "Cost"]\n'
+      'Columns: ["Month", "Role", "Headcount", "Monthly Salary", "Cost"]\n'
       'exampleRows: [[1, "Engineer", 1, 8000, "=C2*D2"], [2, "PM", 1, 7000, "=C3*D3"]]\n'
       'Plus summary row: ["Total", "", "", "", "=SUM(E2:E3)"]\n'
       "Includes: Actual salaries + FORMULAS for costs + SUM formula for total\n\n"
