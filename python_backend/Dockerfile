@@ -16,11 +16,11 @@ COPY requirements.txt python_backend/
 # Install dependencies
 RUN pip install --no-cache-dir -r python_backend/requirements.txt
 
-# Copy the entire python_backend directory as a package
+# Copy the entire python_backend directory as a package (includes mangler.png)
 COPY . python_backend/
 
-# Copy logo file to root for static serving
-COPY mangler.png mangler.png
+# Copy logo file from python_backend to root for static serving
+RUN cp python_backend/mangler.png mangler.png || echo "Warning: mangler.png not found"
 
 # Expose the port the app runs on
 EXPOSE 8000
