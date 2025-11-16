@@ -377,11 +377,53 @@ class AgentOrchestrator:
       role = msg.role
       if role == "user":
         label = "User"
+        lines.append(f"{label}: {msg.content}")
       elif role == "assistant":
         label = "Assistant"
-      else:
+        lines.append(f"{label}: {msg.content}")
+      elif role == "tool":
+        # For tool messages, include the tool result data
         label = "System"
-      lines.append(f"{label}: {msg.content}")
+        tool_content = f"{label}: {msg.content}"
+
+        # Include payload data for certain tools
+        if msg.metadata and msg.metadata.payload:
+          tool_name = msg.metadata.toolName if msg.metadata.toolName else "unknown"
+          payload = msg.metadata.payload
+
+          if tool_name == "read_sheet":
+            # Include a sample of the sheet data
+            values = payload.get("values", [])
+            if values:
+              sample_rows = min(10, len(values))
+              tool_content += f"\n  Sheet data (first {sample_rows} rows):\n"
+              for i, row in enumerate(values[:sample_rows]):
+                # Show each cell with its value and formula (if present)
+                row_data = []
+                for cell in row:
+                  if isinstance(cell, dict):
+                    val = cell.get("value")
+                    formula = cell.get("formula")
+                    if formula:
+                      row_data.append(f"{val} (formula: {formula})")
+                    elif val is not None:
+                      row_data.append(str(val))
+                    else:
+                      row_data.append("")
+                  else:
+                    row_data.append(str(cell) if cell is not None else "")
+                tool_content += f"  Row {i+1}: {' | '.join(row_data[:10])}\n"  # Show first 10 columns
+
+          elif tool_name == "detect_issues":
+            # Include summary of detected issues
+            potential_errors = payload.get("potential_errors", [])
+            if potential_errors:
+              tool_content += f"\n  Found {len(potential_errors)} issues"
+
+        lines.append(tool_content)
+      else:
+        # Other roles (system, etc.)
+        lines.append(f"System: {msg.content}")
     return "\n\n".join(lines)
 
   @staticmethod
