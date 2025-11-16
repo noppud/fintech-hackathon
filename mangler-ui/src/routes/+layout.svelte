@@ -13,7 +13,7 @@
 	];
 
 	const hideHeaderRoutes = ['/', '/chat', '/extension'];
-	$: shouldHideHeader = !data?.isAuthenticated && hideHeaderRoutes.includes($page.url.pathname);
+	const shouldHideHeader = $derived(!data?.isAuthenticated && hideHeaderRoutes.includes($page.url.pathname));
 </script>
 
 <svelte:head>

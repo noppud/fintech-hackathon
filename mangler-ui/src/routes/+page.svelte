@@ -7,9 +7,9 @@
 	const stats = data?.stats;
 
 	const heroHighlights = [
-		{ label: 'Sheets analyzed', value: '147', note: 'this week' },
-		{ label: 'Issues detected', value: '23', note: 'auto-flagged' },
-		{ label: 'Formula accuracy', value: '99.2%', note: 'validation rate' }
+		{ label: 'Active analysts', value: '+300%', note: 'increase compared to yesterday' },
+		{ label: 'Sheets stabilized', value: '+277%', note: 'auto-remediated' },
+		{ label: 'Runbook coverage', value: '98%', note: 'critical workflows' }
 	];
 
 	const telemetryStatus = stats?.available
@@ -358,7 +358,6 @@
 	}
 
 	.dashboard__card--actions ul,
-	.dashboard__card--security ul,
 	.dashboard__card--features ul {
 		margin: 1rem 0 0;
 		padding-left: 1.1rem;
