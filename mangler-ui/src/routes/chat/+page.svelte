@@ -178,6 +178,14 @@
 
 			streamController = new AbortController();
 
+			// Add timeout to prevent stuck state
+			const timeoutId = setTimeout(() => {
+				if (streamController) {
+					streamController.abort();
+					console.log('Request timeout after 30 seconds');
+				}
+			}, 30000);
+
 			const response = await fetch('https://fintech-hackathon-production.up.railway.app/chat/stream', {
 				method: 'POST',
 				headers: {
@@ -187,14 +195,23 @@
 				signal: streamController.signal
 			});
 
+			clearTimeout(timeoutId);
+
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
 
 			await handleStreamResponse(response);
 		} catch (error: any) {
+			isTyping = false; // Ensure typing indicator is removed
 			if (error.name === 'AbortError') {
 				console.log('Stream aborted');
+				// Add a user-friendly message for timeout
+				messages = [...messages, {
+					id: generateMessageId(),
+					role: 'assistant',
+					content: 'Request timed out. Please try again.'
+				}];
 			} else {
 				console.error('Chat error:', error);
 				messages = [...messages, {
@@ -388,14 +405,27 @@
 		display: grid;
 		grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
 		gap: 1.75rem;
-		min-height: calc(100vh - 180px);
+		height: calc(100vh - 180px);
+		max-height: calc(100vh - 180px);
+		overflow: hidden;
 	}
 
-	.sheet-sidebar,
-	.sheet-chat {
+	.sheet-sidebar {
 		display: flex;
 		flex-direction: column;
 		gap: 1.25rem;
+		overflow-y: auto;
+		overflow-x: hidden;
+		padding-right: 0.5rem;
+	}
+
+	.sheet-sidebar::-webkit-scrollbar {
+		width: 4px;
+	}
+
+	.sheet-sidebar::-webkit-scrollbar-thumb {
+		background: rgba(84, 141, 122, 0.4);
+		border-radius: 2px;
 	}
 
 	.sheet-card {
@@ -506,6 +536,8 @@
 		background: rgba(5, 10, 9, 0.85);
 		border: 1px solid rgba(84, 141, 122, 0.4);
 		box-shadow: 0 35px 55px rgba(0, 0, 0, 0.55);
+		height: 100%;
+		overflow: hidden;
 	}
 
 	.sheet-chat__header {
@@ -542,6 +574,9 @@
 		background: rgba(3, 8, 6, 0.75);
 		border: 1px solid rgba(60, 90, 81, 0.45);
 		overflow-y: auto;
+		overflow-x: hidden;
+		max-height: calc(100vh - 400px);
+		min-height: 300px;
 	}
 
 	.sheet-chat__window::-webkit-scrollbar {
@@ -743,8 +778,26 @@
 		font-size: 1rem;
 		font-family: inherit;
 		resize: none;
-		max-height: 160px;
+		max-height: 120px;
+		line-height: 1.5;
+		overflow-y: auto;
+		overflow-x: hidden;
 		transition: border-color 0.2s ease, box-shadow 0.2s ease;
+		scrollbar-width: thin;
+		scrollbar-color: rgba(78, 124, 111, 0.4) transparent;
+	}
+
+	.sheet-composer textarea::-webkit-scrollbar {
+		width: 4px;
+	}
+
+	.sheet-composer textarea::-webkit-scrollbar-thumb {
+		background: rgba(78, 124, 111, 0.4);
+		border-radius: 2px;
+	}
+
+	.sheet-composer textarea::-webkit-scrollbar-track {
+		background: transparent;
 	}
 
 	.sheet-composer textarea:focus {

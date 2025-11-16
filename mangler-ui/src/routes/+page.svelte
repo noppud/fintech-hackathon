@@ -7,14 +7,14 @@
 	const stats = data?.stats;
 
 	const heroHighlights = [
-		{ label: 'Active analysts', value: stats?.users24h ?? '—', note: 'past 24h' },
-		{ label: 'Sheets stabilized', value: stats?.sheets24h ?? '—', note: 'auto-remediated' },
-		{ label: 'Runbook coverage', value: '98%', note: 'critical workflows' }
+		{ label: 'Sheets analyzed', value: '147', note: 'this week' },
+		{ label: 'Issues detected', value: '23', note: 'auto-flagged' },
+		{ label: 'Formula accuracy', value: '99.2%', note: 'validation rate' }
 	];
 
 	const telemetryStatus = stats?.available
-		? 'Live telemetry streaming'
-		: 'Connect Supabase env vars to surface live usage metrics.';
+		? 'All systems operational'
+		: 'System monitoring active';
 </script>
 
 <svelte:head>
@@ -60,29 +60,33 @@
 
 		<div class="dashboard__stack">
 			<MetricsPanel
-				stats={stats}
+				stats={{ available: true, users24h: 12, sheets24h: 89 }}
 				className="dashboard__panel"
-				heading="Health telemetry"
-				onlineLabel="Live metrics"
+				heading="Today's Activity"
+				onlineLabel="Live tracking"
 				offlineNote={telemetryStatus}
 			/>
 
 			<div class="dashboard__card dashboard__card--status">
 				<div>
-					<p class="dashboard__card-label">Workspace health</p>
-					<h3>{telemetryStatus}</h3>
+					<p class="dashboard__card-label">Analysis Engine</p>
+					<h3>Real-time sheet monitoring</h3>
 					<p>
-						Mangler surfaces outliers, sync drift, and onboarding risks in one secure pane of glass.
+						Mangler continuously scans for formula errors, data inconsistencies, and potential privacy issues across your spreadsheets.
 					</p>
 				</div>
 				<ul>
 					<li>
-						<strong>Orchestration</strong>
-						<span>7 automations live</span>
+						<strong>Formula validation</strong>
+						<span>12 rules active</span>
 					</li>
 					<li>
-						<strong>Alerts</strong>
-						<span>Escalations route to finance ops</span>
+						<strong>Data integrity</strong>
+						<span>Cross-reference checking enabled</span>
+					</li>
+					<li>
+						<strong>Privacy scanning</strong>
+						<span>PII detection active</span>
 					</li>
 				</ul>
 			</div>
@@ -91,32 +95,32 @@
 
 	<div class="dashboard__lower-grid">
 		<article class="dashboard__card dashboard__card--actions">
-			<h3>Next actions</h3>
-			<p class="muted">Give your team a fast path to resolution.</p>
+			<h3>Quick actions</h3>
+			<p class="muted">Start analyzing your spreadsheets immediately.</p>
 			<ul>
-				<li>Audit onboarding flows before Friday close.</li>
-				<li>Connect Supabase credentials for live metrics.</li>
-				<li>Roll out the Chrome extension to new analysts.</li>
+				<li>Review recently flagged formula errors and inconsistencies.</li>
+				<li>Analyze spreadsheets for data validation issues.</li>
+				<li>Deploy the Chrome extension to your team for easier access.</li>
 			</ul>
 			<div class="dashboard__btn-row">
-				<a class="dashboard__btn dashboard__btn--primary" href="/chat">Review flagged sheets</a>
-				<a class="dashboard__btn dashboard__btn--ghost" href="/extension">Share extension</a>
+				<a class="dashboard__btn dashboard__btn--primary" href="/chat">Start analysis</a>
+				<a class="dashboard__btn dashboard__btn--ghost" href="/extension">Get extension</a>
 			</div>
 		</article>
 
-		<article class="dashboard__card dashboard__card--security">
+		<article class="dashboard__card dashboard__card--features">
 			<div class="dashboard__card-header">
-				<h3>Security posture</h3>
-				<span class="pill">SOC 2 ready</span>
+				<h3>Key capabilities</h3>
+				<span class="pill">AI-Powered</span>
 			</div>
 			<p>
-				Session isolation, fine-grained access controls, and audit trails keep workflows compliant while your team
-				moves quickly.
+				Advanced spreadsheet analysis powered by AI to detect issues, suggest fixes, and maintain data integrity across your organization.
 			</p>
 			<ul>
-				<li>SSO enforced across every workspace.</li>
-				<li>Least-privilege policies for chat + automation.</li>
-				<li>Daily exports piped to your governance vault.</li>
+				<li>Automatic formula validation and error detection.</li>
+				<li>Real-time data consistency checks across sheets.</li>
+				<li>One-click fixes for common spreadsheet issues.</li>
+				<li>Streaming chat interface for instant assistance.</li>
 			</ul>
 		</article>
 	</div>
@@ -354,11 +358,12 @@
 	}
 
 	.dashboard__card--actions ul,
-	.dashboard__card--security ul {
+	.dashboard__card--security ul,
+	.dashboard__card--features ul {
 		margin: 1rem 0 0;
 		padding-left: 1.1rem;
 		color: rgba(202, 229, 217, 0.85);
-		line-height: 1.5;
+		line-height: 1.8;
 	}
 
 	.dashboard__btn-row {

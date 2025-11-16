@@ -11,6 +11,9 @@
 		{ href: '/chat', label: 'Sheet Mangler' },
 		{ href: '/extension', label: 'Extension' }
 	];
+
+	const hideHeaderRoutes = ['/', '/chat', '/extension'];
+	$: shouldHideHeader = !data?.isAuthenticated && hideHeaderRoutes.includes($page.url.pathname);
 </script>
 
 <svelte:head>
@@ -18,46 +21,48 @@
 	<link rel="icon" href="/mangler.png" sizes="32x32" type="image/png" />
 </svelte:head>
 
-<header class="app-header">
-	<div class="app-header__inner">
-		<div class="app-header__brand">
-			<a href="/">Mangler</a>
-			<p class="app-header__tagline">Operational console</p>
-		</div>
-
-		<nav class="app-header__nav" aria-label="Primary">
-			{#each navLinks as link}
-				<a
-					href={link.href}
-					class={`app-header__nav-link ${$page.url.pathname === link.href ? 'is-active' : ''}`.trim()}
-					aria-current={$page.url.pathname === link.href ? 'page' : undefined}
-				>
-					{link.label}
-				</a>
-			{/each}
-		</nav>
-
-		{#if data?.isAuthenticated}
-			<div class="app-header__user">
-				<span class="app-header__email">{data.user?.email}</span>
-				<a class="app-header__link" href="/api/auth/logout" data-sveltekit-reload>
-					Logout
-				</a>
+{#if !shouldHideHeader}
+	<header class="app-header">
+		<div class="app-header__inner">
+			<div class="app-header__brand">
+				<a href="/">Mangler</a>
+				<p class="app-header__tagline">Operational console</p>
 			</div>
-		{:else}
-			<a class="app-header__link" href="/login">
-				Login
-			</a>
-		{/if}
-	</div>
 
-	{#if missingKindeConfig}
-		<div class="app-banner">
-			<span>Authentication not configured.</span>
-			<span class="app-banner__vars">Missing: {missingEnv.join(', ')}</span>
+			<nav class="app-header__nav" aria-label="Primary">
+				{#each navLinks as link}
+					<a
+						href={link.href}
+						class={`app-header__nav-link ${$page.url.pathname === link.href ? 'is-active' : ''}`.trim()}
+						aria-current={$page.url.pathname === link.href ? 'page' : undefined}
+					>
+						{link.label}
+					</a>
+				{/each}
+			</nav>
+
+			{#if data?.isAuthenticated}
+				<div class="app-header__user">
+					<span class="app-header__email">{data.user?.email}</span>
+					<a class="app-header__link" href="/api/auth/logout" data-sveltekit-reload>
+						Logout
+					</a>
+				</div>
+			{:else}
+				<a class="app-header__link" href="/login">
+					Login
+				</a>
+			{/if}
 		</div>
-	{/if}
-</header>
+
+		{#if missingKindeConfig}
+			<div class="app-banner">
+				<span>Authentication not configured.</span>
+				<span class="app-banner__vars">Missing: {missingEnv.join(', ')}</span>
+			</div>
+		{/if}
+	</header>
+{/if}
 
 <main class="app-main">
 	{@render children()}
