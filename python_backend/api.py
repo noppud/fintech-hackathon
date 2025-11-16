@@ -1890,6 +1890,11 @@ class InstallExtensionRequest(BaseModel):
     google_access_token: Optional[str] = None
 
 
+class RegisterTesterRequest(BaseModel):
+    """Request to ensure a user is on the OAuth consent screen tester list."""
+    user_email: str
+
+
 @app.post("/extension/check-access")
 async def check_sheet_access(request: InstallExtensionRequest) -> Dict[str, Any]:
     """
@@ -1922,6 +1927,26 @@ async def check_sheet_access(request: InstallExtensionRequest) -> Dict[str, Any]
     except Exception as e:
         logger.error(f"Error checking sheet access: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/extension/register-tester")
+async def register_tester(request: RegisterTesterRequest) -> Dict[str, Any]:
+    """
+    Ensure the authenticated user is present in the OAuth consent screen test user list.
+    """
+    if not request.user_email:
+        raise HTTPException(status_code=400, detail="user_email is required")
+
+    try:
+        from .oauth_consent_manager import OAuthConsentManager
+
+        manager = OAuthConsentManager()
+        return manager.ensure_test_user(request.user_email)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Error registering OAuth tester: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/extension/install")

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
+	import { onMount } from 'svelte';
 
 	let { data } = $props();
 
@@ -39,10 +40,90 @@
 	let googleTokenExpiry = $state(0);
 	let googleAuthError = $state('');
 	let googleScriptPromise: Promise<void> | null = null;
+	let testerStatus = $state<'idle' | 'pending' | 'success' | 'error'>('idle');
+	let testerError = $state('');
+	let testerPromise: Promise<boolean> | null = null;
+	let fileCopyState = $state<Record<string, 'idle' | 'copied' | 'error'>>({});
+
+	const MANUAL_FILES = [
+		{
+			name: 'Code.gs',
+			url: '/extension/Code.gs',
+			description: 'Main script logic. Create/replace Code.gs in Apps Script.'
+		},
+		{
+			name: 'Sidebar.html',
+			url: '/extension/Sidebar.html',
+			description: 'Sidebar UI. Create an HTML file named Sidebar and paste this content.'
+		},
+		{
+			name: 'appsscript.json',
+			url: '/extension/appsscript.json',
+			description: 'Manifest file. Replace the default project manifest with this JSON.'
+		}
+	] as const;
 
 	function resetGoogleToken() {
 		googleAccessToken = '';
 		googleTokenExpiry = 0;
+	}
+
+	onMount(() => {
+		ensureTesterRegistered().catch(() => {
+			// errors handled via testerStatus/testerError state
+		});
+	});
+
+	async function ensureTesterRegistered(force = false): Promise<boolean> {
+		const userEmail = data?.user?.email;
+
+		if (!browser || !userEmail) {
+			return true;
+		}
+
+		if (testerStatus === 'success' && !force) {
+			return true;
+		}
+
+		if (testerPromise && !force) {
+			return testerPromise;
+		}
+
+		testerPromise = (async () => {
+			try {
+				testerStatus = 'pending';
+				testerError = '';
+
+				const response = await fetch(`${BACKEND_URL}/extension/register-tester`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ user_email: userEmail })
+				});
+
+				if (response.status === 404) {
+					// Backend hasn't been deployed with tester support yet. Treat as success.
+					testerStatus = 'success';
+					return true;
+				}
+
+				const result = await response.json();
+
+				if (!response.ok) {
+					throw new Error(result?.detail || 'Unable to register as OAuth tester.');
+				}
+
+				testerStatus = 'success';
+				return true;
+			} catch (err: any) {
+				testerStatus = 'error';
+				testerError = err?.message || 'Failed to register as OAuth tester.';
+				return false;
+			} finally {
+				testerPromise = null;
+			}
+		})();
+
+		return testerPromise;
 	}
 
 	function extractSpreadsheetId(url: string): string | null {
@@ -150,6 +231,13 @@
 			return;
 		}
 
+		const testerReady = await ensureTesterRegistered();
+		if (!testerReady) {
+			errorMessage = testerError || 'Unable to authorize your Google account. Please try again.';
+			step = 'error';
+			return;
+		}
+
 		spreadsheetId = id;
 		step = 'check-access';
 
@@ -253,6 +341,22 @@
 			navigator.clipboard.writeText(serviceAccountEmail);
 		}
 	}
+
+	async function copyFile(fileName: string, url: string) {
+		try {
+			const response = await fetch(url);
+			if (!response.ok) throw new Error('Unable to load file contents');
+			const text = await response.text();
+			await navigator.clipboard.writeText(text);
+			fileCopyState = { ...fileCopyState, [fileName]: 'copied' };
+			setTimeout(() => {
+				fileCopyState = { ...fileCopyState, [fileName]: 'idle' };
+			}, 2000);
+		} catch (err) {
+			console.error('Failed to copy file', err);
+			fileCopyState = { ...fileCopyState, [fileName]: 'error' };
+		}
+	}
 </script>
 
 <svelte:head>
@@ -291,6 +395,20 @@
 					</div>
 					<p class="hint">Copy this email and share your sheet with Editor permissions</p>
 				</div>
+
+				{#if testerStatus === 'pending'}
+					<div class="tester-notice tester-notice--pending">
+						Adding your Google account to the OAuth tester list…
+					</div>
+				{:else if testerStatus === 'success'}
+					<div class="tester-notice tester-notice--success">
+						You're authorized to approve the Mangler extension install.
+					</div>
+				{:else if testerStatus === 'error'}
+					<div class="tester-notice tester-notice--error">
+						We couldn't add your account to the tester list. {testerError}
+					</div>
+				{/if}
 
 					<h2>Step 2: Enter Your Sheet URL</h2>
 				<p class="instruction">
@@ -401,6 +519,40 @@
 						<li>Wait a few seconds after sharing before trying again</li>
 						<li>Check that the spreadsheet URL is correct</li>
 					</ul>
+				</div>
+
+				<div class="manual-fallback">
+					<h3>Manual Installation Fallback</h3>
+					<p>
+						If the automated install fails, you can add the script manually:
+					</p>
+					<ol>
+						<li>Open your sheet → Extensions → Apps Script</li>
+						<li>Replace the files below with our versions</li>
+						<li>Refresh the sheet and open the Mangler menu</li>
+					</ol>
+					<div class="manual-files">
+						{#each MANUAL_FILES as file}
+							<div class="manual-file-card">
+								<div>
+									<div class="manual-file-name">{file.name}</div>
+									<p>{file.description}</p>
+								</div>
+								<div class="manual-file-actions">
+									<a href={file.url} download={file.name}>Download</a>
+									<button type="button" onclick={() => copyFile(file.name, file.url)}>
+										{#if fileCopyState[file.name] === 'copied'}
+											Copied!
+										{:else if fileCopyState[file.name] === 'error'}
+											Retry Copy
+										{:else}
+											Copy
+										{/if}
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
 				</div>
 
 				<button type="button" onclick={reset} class="retry-btn">Try Again</button>
@@ -543,6 +695,31 @@
 		margin: 0.75rem 0 0;
 		font-size: 0.85rem;
 		color: #7dd3fc;
+	}
+
+	.tester-notice {
+		margin: 0 0 1.5rem;
+		padding: 0.85rem 1rem;
+		border-radius: 0.75rem;
+		font-size: 0.95rem;
+	}
+
+	.tester-notice--pending {
+		background: rgba(59, 130, 246, 0.1);
+		border: 1px solid rgba(59, 130, 246, 0.3);
+		color: #bfdbfe;
+	}
+
+	.tester-notice--success {
+		background: rgba(34, 197, 94, 0.12);
+		border: 1px solid rgba(34, 197, 94, 0.35);
+		color: #86efac;
+	}
+
+	.tester-notice--error {
+		background: rgba(248, 113, 113, 0.12);
+		border: 1px solid rgba(248, 113, 113, 0.35);
+		color: #fecaca;
 	}
 
 	.url-input {
@@ -759,6 +936,60 @@
 	.error-help ul {
 		color: #94a3b8;
 		line-height: 1.8;
+	}
+
+	.manual-fallback {
+		text-align: left;
+		margin-top: 2rem;
+		padding-top: 1.5rem;
+		border-top: 1px solid rgba(148, 163, 184, 0.25);
+	}
+
+	.manual-fallback ol {
+		margin: 0 0 1rem;
+		padding-left: 1.25rem;
+		color: #94a3b8;
+	}
+
+	.manual-files {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.manual-file-card {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1rem;
+		border-radius: 0.75rem;
+		background: rgba(15, 23, 42, 0.7);
+		border: 1px solid rgba(148, 163, 184, 0.2);
+	}
+
+	.manual-file-name {
+		font-weight: 600;
+	}
+
+	.manual-file-actions {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+	}
+
+	.manual-file-actions a {
+		color: #93c5fd;
+		text-decoration: none;
+		font-size: 0.9rem;
+	}
+
+	.manual-file-actions button {
+		border: none;
+		padding: 0.5rem 0.85rem;
+		border-radius: 0.5rem;
+		background: rgba(59, 130, 246, 0.15);
+		color: #bfdbfe;
+		cursor: pointer;
 	}
 
 </style>

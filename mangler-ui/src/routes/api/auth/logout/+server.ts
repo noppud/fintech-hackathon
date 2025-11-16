@@ -1,7 +1,7 @@
 import { kindeAuthClient } from '@kinde-oss/kinde-auth-sveltekit';
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
-import { redirect, error } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 
 const resolveLogoutRedirect = () => {
 	return (
@@ -16,7 +16,7 @@ export const GET: RequestHandler = async (event) => {
 
 	try {
 		const url = await kindeAuthClient.logout(
-			event as Parameters<typeof kindeAuthClient.logout>[0]
+			event as unknown as Parameters<typeof kindeAuthClient.logout>[0]
 		);
 
 		url.searchParams.set('post_logout_redirect_uri', redirectTarget);

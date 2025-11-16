@@ -50,8 +50,9 @@
 	.metrics-panel {
 		padding: 2rem;
 		border-radius: 1.5rem;
-		background: rgba(15, 23, 42, 0.6);
-		border: 1px solid rgba(148, 163, 184, 0.2);
+		background: rgba(10, 19, 16, 0.85);
+		border: 1px solid rgba(75, 104, 93, 0.35);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 	}
 
 	.metrics-panel__header {
@@ -67,8 +68,8 @@
 		width: 0.75rem;
 		height: 0.75rem;
 		border-radius: 50%;
-		background: #22d3ee;
-		box-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
+		background: #45f1a4;
+		box-shadow: 0 0 12px rgba(69, 241, 164, 0.7);
 		display: inline-flex;
 	}
 
@@ -83,13 +84,13 @@
 	.metrics-panel__metrics li {
 		padding: 1.1rem;
 		border-radius: 1rem;
-		background: rgba(2, 6, 23, 0.4);
-		border: 1px solid rgba(148, 163, 184, 0.2);
+		background: rgba(5, 12, 10, 0.6);
+		border: 1px solid rgba(82, 109, 100, 0.3);
 	}
 
 	.metrics-panel__note {
 		font-size: 0.95rem;
-		color: rgba(248, 250, 252, 0.7);
+		color: rgba(184, 213, 202, 0.8);
 		margin: 0;
 	}
 
@@ -98,12 +99,13 @@
 		text-transform: uppercase;
 		letter-spacing: 0.2em;
 		margin-bottom: 0.35rem;
-		color: rgba(148, 163, 184, 0.8);
+		color: rgba(129, 157, 148, 0.85);
 	}
 
 	.value {
 		font-size: clamp(1.5rem, 4vw, 2.5rem);
 		font-weight: 600;
 		margin: 0;
+		color: #f4fff9;
 	}
 </style>

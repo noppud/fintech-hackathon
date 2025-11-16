@@ -25,7 +25,7 @@
 
 		<div class="dashboard__actions">
 			<a class="dashboard__btn dashboard__btn--primary" href="/extension">Get Extension</a>
-			<a class="dashboard__btn dashboard__btn--ghost" href="/api/auth/logout">Sign out</a>
+			<a class="dashboard__btn dashboard__btn--ghost" href="/api/auth/logout" data-sveltekit-reload>Sign out</a>
 		</div>
 	</div>
 
@@ -58,25 +58,27 @@
 	.dashboard__hero {
 		padding: 2.5rem;
 		border-radius: 1.5rem;
-		background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(99, 102, 241, 0.25));
-		box-shadow: 0 25px 50px rgba(15, 23, 42, 0.55);
+		background: linear-gradient(135deg, rgba(15, 32, 28, 0.95), rgba(28, 50, 44, 0.85));
+		box-shadow: 0 35px 60px rgba(5, 9, 8, 0.55);
+		border: 1px solid rgba(82, 110, 100, 0.6);
 	}
 
 	.dashboard__eyebrow {
 		font-size: 0.85rem;
 		text-transform: uppercase;
 		letter-spacing: 0.2em;
-		color: rgba(248, 250, 252, 0.8);
+		color: rgba(181, 214, 201, 0.85);
 		margin-bottom: 0.75rem;
 	}
 
 	h1 {
 		font-size: clamp(2rem, 4vw, 3rem);
 		margin: 0 0 1rem;
+		color: #f3fff9;
 	}
 
 	.dashboard__copy {
-		color: rgba(248, 250, 252, 0.8);
+		color: rgba(212, 238, 227, 0.85);
 		margin-bottom: 1.5rem;
 		line-height: 1.7;
 	}
@@ -85,10 +87,11 @@
 		display: inline-flex;
 		padding: 0.5rem 0.85rem;
 		border-radius: 999px;
-		background: rgba(15, 23, 42, 0.4);
-		border: 1px solid rgba(148, 163, 184, 0.4);
+		background: rgba(5, 12, 10, 0.5);
+		border: 1px solid rgba(101, 136, 123, 0.5);
 		font-size: 0.9rem;
 		margin-bottom: 1.2rem;
+		color: #d2fff0;
 	}
 
 	.dashboard__actions {
@@ -109,15 +112,15 @@
 	}
 
 	.dashboard__btn--primary {
-		background: #facc15;
-		color: #0f172a;
-		box-shadow: 0 10px 20px rgba(250, 204, 21, 0.35);
+		background: linear-gradient(135deg, #2ba36a, #3fd08b);
+		color: #04130d;
+		box-shadow: 0 15px 30px rgba(63, 208, 139, 0.35);
 	}
 
 	.dashboard__btn--ghost {
-		background: rgba(15, 23, 42, 0.6);
-		color: #f8fafc;
-		border: 1px solid rgba(148, 163, 184, 0.5);
+		background: rgba(5, 12, 10, 0.6);
+		color: #cdeee0;
+		border: 1px solid rgba(95, 130, 118, 0.6);
 	}
 
 	.dashboard__btn:hover {
@@ -128,14 +131,14 @@
 		grid-column: 1 / -1;
 		padding: 1.5rem;
 		border-radius: 1rem;
-		background: rgba(251, 146, 60, 0.12);
-		border: 1px solid rgba(251, 146, 60, 0.4);
-		color: #ffedd5;
+		background: rgba(191, 97, 71, 0.12);
+		border: 1px solid rgba(191, 97, 71, 0.3);
+		color: #f9c5b5;
 	}
 
 	.dashboard__warning code {
 		font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
-		color: #fed7aa;
+		color: #ffd7cb;
 		font-size: 0.9rem;
 	}
 </style>
