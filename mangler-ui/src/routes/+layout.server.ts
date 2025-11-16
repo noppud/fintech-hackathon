@@ -4,7 +4,7 @@ import { dev } from '$app/environment';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
-const PUBLIC_ROUTES = ['/login'];
+const PUBLIC_ROUTES = ['/', '/login', '/pricing'];
 const REQUIRED_KINDE_ENV = [
 	'KINDE_ISSUER_URL',
 	'KINDE_CLIENT_ID',
