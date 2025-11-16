@@ -30,6 +30,45 @@
 	let sheetTitle = 'Sheet1';
 	let issues: Issue[] = [];
 	let streamController: AbortController | null = null;
+	let tooltipVisible = false;
+	let tooltipTrigger: HTMLDivElement;
+	let tooltipTop = 0;
+	let tooltipLeft = 0;
+
+	function updateTooltipPosition() {
+		if (!tooltipTrigger) return;
+		const rect = tooltipTrigger.getBoundingClientRect();
+		const gap = 12;
+		const tooltipWidth = 380;
+		let left = rect.right + gap;
+		let top = rect.top;
+
+		// If there's not enough space on the right, place it below
+		if (left + tooltipWidth > window.innerWidth - 16) {
+			left = rect.left;
+			top = rect.bottom + gap;
+		}
+
+		tooltipTop = top;
+		tooltipLeft = left;
+	}
+
+	function showTooltip() {
+		updateTooltipPosition();
+		tooltipVisible = true;
+	}
+
+	function hideTooltip() {
+		tooltipVisible = false;
+	}
+
+	function toggleTooltip() {
+		if (tooltipVisible) {
+			hideTooltip();
+		} else {
+			showTooltip();
+		}
+	}
 
 	function removeTypingPlaceholder() {
 		const last = messages[messages.length - 1];
@@ -275,6 +314,8 @@
 
 	// Initialize
 	onMount(() => {
+		window.addEventListener('resize', updateTooltipPosition);
+
 		// Add welcome message
 		messages = [{
 			id: generateMessageId(),
@@ -293,6 +334,8 @@
 		if (streamController) {
 			streamController.abort();
 		}
+
+		window.removeEventListener('resize', updateTooltipPosition);
 	});
 </script>
 
@@ -306,28 +349,37 @@
 			<p class="eyebrow">Sheet context</p>
 			<div class="sheet-card__header-with-tooltip">
 				<h2>Sheet Mangler</h2>
-				<div class="tooltip-wrapper">
+				<div
+					class="tooltip-wrapper"
+					bind:this={tooltipTrigger}
+					on:click={toggleTooltip}
+				>
 					<svg class="info-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
 						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
 					</svg>
-					<div class="tooltip-content">
-						<h4>Step 1: Share Your Google Sheet</h4>
-						<p>First, share your Google Sheet with our service account so we can install the extension.</p>
-						<div class="service-account-section">
-							<label>Service Account Email:</label>
-							<div class="email-copy-box">
-								<code>googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com</code>
-								<button class="copy-btn" on:click={() => {
-									navigator.clipboard.writeText('googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com');
-								}}>
-									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-										<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-									</svg>
-								</button>
+					{#if tooltipVisible}
+						<div
+							class="tooltip-content"
+							style={`top: ${tooltipTop}px; left: ${tooltipLeft}px;`}
+						>
+							<h4>Step 1: Share Your Google Sheet</h4>
+							<p>First, share your Google Sheet with our service account so we can install the extension.</p>
+							<div class="service-account-section">
+								<label>Service Account Email:</label>
+								<div class="email-copy-box">
+									<code>googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com</code>
+									<button class="copy-btn" on:click={() => {
+										navigator.clipboard.writeText('googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com');
+									}}>
+										<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+											<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+										</svg>
+									</button>
+								</div>
+								<p class="permission-note">Copy this email and share your sheet with Editor permissions</p>
 							</div>
-							<p class="permission-note">Copy this email and share your sheet with Editor permissions</p>
 						</div>
-					</div>
+					{/if}
 				</div>
 			</div>
 			<p>Attach a Google Sheet and Mangler will keep anomalies, formula drifts, and privacy leaks in check.</p>
@@ -943,28 +995,17 @@
 	}
 
 	.tooltip-content {
-		position: absolute;
-		left: 30px;
-		top: -10px;
-		width: 380px;
-		max-width: min(380px, 80vw);
+		position: fixed;
+		width: 340px;
+		max-width: min(340px, 80vw);
 		padding: 1.25rem;
 		background: rgba(3, 8, 7, 0.98);
 		border: 1px solid rgba(78, 240, 178, 0.4);
 		border-radius: 1rem;
 		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(78, 240, 178, 0.1);
 		z-index: 10000;
-		opacity: 0;
-		visibility: hidden;
-		transform: translateX(-10px);
+		transform: translateY(-8px);
 		transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
-		pointer-events: none;
-	}
-
-	.tooltip-wrapper:hover .tooltip-content {
-		opacity: 1;
-		visibility: visible;
-		transform: translateX(0);
 		pointer-events: auto;
 	}
 
