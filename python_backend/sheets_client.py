@@ -123,6 +123,17 @@ class ServiceAccountSheetsClient:
       "sheets": sheets_meta,
     }
 
+  def get_sheet_title_by_gid(self, spreadsheet_id: str, gid: str) -> Optional[str]:
+    """
+    Resolve a sheet title from its gid (sheet ID).
+    Returns None if the gid is not found.
+    """
+    metadata = self.get_spreadsheet_metadata(spreadsheet_id)
+    for sheet in metadata.get("sheets", []):
+      if str(sheet.get("sheetId")) == str(gid):
+        return sheet.get("title")
+    return None
+
   # --- Range helpers ---
 
   @staticmethod

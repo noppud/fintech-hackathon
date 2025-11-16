@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .sheets_client import ServiceAccountSheetsClient
 
@@ -15,7 +15,24 @@ class ContextBuilder:
   def __init__(self, client: ServiceAccountSheetsClient) -> None:
     self.client = client
 
-  def build_context(self, spreadsheet_id: str, sheet_title: str) -> Dict[str, Any]:
+  def build_context(self, spreadsheet_id: str, sheet_title: str, gid: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Build context for a sheet.
+
+    Args:
+      spreadsheet_id: The bare spreadsheet ID (not a URL)
+      sheet_title: The sheet title (name), or None if using gid
+      gid: The sheet gid (ID) to resolve to a title, optional
+    """
+    # If gid is provided but no sheet_title, resolve the title from gid
+    if gid and not sheet_title:
+      sheet_title = self.client.get_sheet_title_by_gid(spreadsheet_id, gid)
+      if not sheet_title:
+        raise ValueError(f'Sheet with gid "{gid}" not found in spreadsheet')
+
+    if not sheet_title:
+      raise ValueError("Either sheet_title or gid must be provided")
+
     metadata = self.client.get_spreadsheet_metadata(spreadsheet_id)
     sheet_meta = next(
       (s for s in metadata.get("sheets", []) if s.get("title") == sheet_title),
@@ -41,7 +58,24 @@ class ContextBuilder:
       "sampleData": sample_data,
     }
 
-  def build_lightweight_context(self, spreadsheet_id: str, sheet_title: str) -> Dict[str, Any]:
+  def build_lightweight_context(self, spreadsheet_id: str, sheet_title: str, gid: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Build lightweight context for a sheet.
+
+    Args:
+      spreadsheet_id: The bare spreadsheet ID (not a URL)
+      sheet_title: The sheet title (name), or None if using gid
+      gid: The sheet gid (ID) to resolve to a title, optional
+    """
+    # If gid is provided but no sheet_title, resolve the title from gid
+    if gid and not sheet_title:
+      sheet_title = self.client.get_sheet_title_by_gid(spreadsheet_id, gid)
+      if not sheet_title:
+        raise ValueError(f'Sheet with gid "{gid}" not found in spreadsheet')
+
+    if not sheet_title:
+      raise ValueError("Either sheet_title or gid must be provided")
+
     metadata = self.client.get_spreadsheet_metadata(spreadsheet_id)
     sheet_meta = next(
       (s for s in metadata.get("sheets", []) if s.get("title") == sheet_title),

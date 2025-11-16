@@ -10,7 +10,7 @@ from .mistake_detector import MistakeDetector
 from .modifier import SheetModifier
 from .context_builder import ContextBuilder
 from .sheets_client import ServiceAccountSheetsClient
-from .utils import normalize_spreadsheet_id
+from .utils import normalize_spreadsheet_id, parse_spreadsheet_url
 from .models import ChatMessage, SheetContext
 
 logger = get_logger(__name__)
@@ -125,16 +125,25 @@ class AgentOrchestrator:
 
     try:
       if tool_name == "detect_issues":
-        spreadsheet_id = normalize_spreadsheet_id(
-          args.get("spreadsheetId")
-          or sheet_context.spreadsheetId
-          or ""
-        )
+        # Parse the spreadsheet URL to extract ID and gid
+        raw_id = args.get("spreadsheetId") or sheet_context.spreadsheetId or ""
+        parsed = parse_spreadsheet_url(raw_id)
+        spreadsheet_id = parsed["spreadsheet_id"]
+        gid = parsed["gid"]
+
         sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle
+
         if not spreadsheet_id:
           raise ValueError("Missing spreadsheet ID")
+
+        # If no sheet_title but gid is present, resolve it
+        if not sheet_title and gid:
+          sheet_title = self.sheets_client.get_sheet_title_by_gid(spreadsheet_id, gid)
+          if not sheet_title:
+            raise ValueError(f"Could not resolve sheet title from gid={gid}")
+
         if not sheet_title:
-          raise ValueError("Missing sheet title")
+          raise ValueError("Missing sheet title (provide sheetTitle or a URL with gid)")
 
         config_dict = args.get("config") or {}
         config = {
@@ -172,19 +181,28 @@ class AgentOrchestrator:
         )
 
       elif tool_name == "modify_sheet":
-        spreadsheet_id = normalize_spreadsheet_id(
-          args.get("spreadsheetId")
-          or sheet_context.spreadsheetId
-          or ""
-        )
+        # Parse the spreadsheet URL to extract ID and gid
+        raw_id = args.get("spreadsheetId") or sheet_context.spreadsheetId or ""
+        parsed = parse_spreadsheet_url(raw_id)
+        spreadsheet_id = parsed["spreadsheet_id"]
+        gid = parsed["gid"]
+
         if not spreadsheet_id:
           raise ValueError("Missing spreadsheet ID")
         if not args.get("prompt"):
           raise ValueError("Missing modification prompt")
 
+        sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle
+
+        # If no sheet_title but gid is present, resolve it
+        if not sheet_title and gid:
+          sheet_title = self.sheets_client.get_sheet_title_by_gid(spreadsheet_id, gid)
+          if not sheet_title:
+            raise ValueError(f"Could not resolve sheet title from gid={gid}")
+
         modify_request = {
           "spreadsheetId": spreadsheet_id,
-          "sheetTitle": args.get("sheetTitle") or sheet_context.sheetTitle,
+          "sheetTitle": sheet_title,
           "prompt": args.get("prompt"),
           "constraints": args.get("constraints"),
         }
@@ -248,16 +266,25 @@ class AgentOrchestrator:
         if not updates:
           raise ValueError("Missing updates array")
 
-        # Get sheet context
-        spreadsheet_id = normalize_spreadsheet_id(
-          args.get("spreadsheetId")
-          or sheet_context.spreadsheetId
-          or ""
-        )
+        # Parse the spreadsheet URL to extract ID and gid
+        raw_id = args.get("spreadsheetId") or sheet_context.spreadsheetId or ""
+        parsed = parse_spreadsheet_url(raw_id)
+        spreadsheet_id = parsed["spreadsheet_id"]
+        gid = parsed["gid"]
+
         if not spreadsheet_id:
           raise ValueError("Missing spreadsheet ID")
 
-        sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle or "Sheet1"
+        sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle
+
+        # If no sheet_title but gid is present, resolve it
+        if not sheet_title and gid:
+          sheet_title = self.sheets_client.get_sheet_title_by_gid(spreadsheet_id, gid)
+
+        # Fall back to Sheet1 if still no title
+        if not sheet_title:
+          sheet_title = "Sheet1"
+
         create_snapshot = args.get("create_snapshot", True)
 
         try:
@@ -294,18 +321,25 @@ class AgentOrchestrator:
         )
 
       elif tool_name == "read_sheet":
-        # Read sheet data with both values and formulas
-        spreadsheet_id = normalize_spreadsheet_id(
-          args.get("spreadsheetId")
-          or sheet_context.spreadsheetId
-          or ""
-        )
+        # Parse the spreadsheet URL to extract ID and gid
+        raw_id = args.get("spreadsheetId") or sheet_context.spreadsheetId or ""
+        parsed = parse_spreadsheet_url(raw_id)
+        spreadsheet_id = parsed["spreadsheet_id"]
+        gid = parsed["gid"]
+
         if not spreadsheet_id:
           raise ValueError("Missing spreadsheet ID")
 
         sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle
+
+        # If no sheet_title but gid is present, resolve it
+        if not sheet_title and gid:
+          sheet_title = self.sheets_client.get_sheet_title_by_gid(spreadsheet_id, gid)
+          if not sheet_title:
+            raise ValueError(f"Could not resolve sheet title from gid={gid}")
+
         if not sheet_title:
-          raise ValueError("Missing sheet title")
+          raise ValueError("Missing sheet title (provide sheetTitle or a URL with gid)")
 
         # Get range - default to entire sheet if not specified
         range_a1 = args.get("range")
