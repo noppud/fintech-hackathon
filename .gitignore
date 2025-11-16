@@ -23,5 +23,6 @@ credentials.json
 python_backend/__pycache__/
 python_backend/__pycache__/*
 python_backend/__pycache__/api.cpython-314.pyc
-*.ipynb
-*.md
+
+# Jupyter notebooks (remove if you want to track notebooks)
+# *.ipynb
