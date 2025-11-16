@@ -5,6 +5,16 @@
 	const userEmail = data?.user?.email;
 	const missingKindeConfig = data?.missingKindeConfig;
 	const stats = data?.stats;
+
+	const heroHighlights = [
+		{ label: 'Active analysts', value: stats?.users24h ?? '—', note: 'past 24h' },
+		{ label: 'Sheets stabilized', value: stats?.sheets24h ?? '—', note: 'auto-remediated' },
+		{ label: 'Runbook coverage', value: '98%', note: 'critical workflows' }
+	];
+
+	const telemetryStatus = stats?.available
+		? 'Live telemetry streaming'
+		: 'Connect Supabase env vars to surface live usage metrics.';
 </script>
 
 <svelte:head>
@@ -30,11 +40,7 @@
 		</div>
 	</div>
 
-	<MetricsPanel
-		stats={stats}
-		className="dashboard__panel"
-		offlineNote="Connect Supabase env vars to surface live usage metrics."
-	/>
+	<MetricsPanel stats={stats} className="dashboard__panel" />
 
 	{#if missingKindeConfig}
 		<div class="dashboard__warning">
@@ -116,6 +122,12 @@
 		background: linear-gradient(135deg, #2ba36a, #3fd08b);
 		color: #04130d;
 		box-shadow: 0 15px 30px rgba(63, 208, 139, 0.35);
+	}
+
+	.dashboard__btn--secondary {
+		background: rgba(43, 163, 106, 0.15);
+		color: #a7f3d0;
+		border: 1px solid rgba(43, 163, 106, 0.4);
 	}
 
 	.dashboard__btn--ghost {

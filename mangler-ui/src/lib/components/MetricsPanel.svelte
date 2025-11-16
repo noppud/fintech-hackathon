@@ -10,7 +10,6 @@
 	export let heading = 'Last 24 hours';
 	export let onlineLabel = 'Live telemetry';
 	export let offlineLabel = 'Metrics unavailable';
-	export let offlineNote = 'Connect Supabase env vars to surface live usage metrics.';
 
 	const metrics = stats ?? {
 		available: false,
@@ -41,8 +40,6 @@
 				<p class="value">{metrics.sheets24h}</p>
 			</li>
 		</ul>
-	{:else}
-		<p class="metrics-panel__note">{offlineNote}</p>
 	{/if}
 </div>
 
@@ -86,12 +83,6 @@
 		border-radius: 1rem;
 		background: rgba(5, 12, 10, 0.6);
 		border: 1px solid rgba(82, 109, 100, 0.3);
-	}
-
-	.metrics-panel__note {
-		font-size: 0.95rem;
-		color: rgba(184, 213, 202, 0.8);
-		margin: 0;
 	}
 
 	.label {

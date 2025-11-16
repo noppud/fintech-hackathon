@@ -33,11 +33,7 @@
 			</ul>
 
 			<div class="login__metrics">
-				<MetricsPanel
-					stats={stats}
-					heading="Last 24 hours"
-					offlineNote="Connect Supabase env vars to surface live usage metrics."
-				/>
+				<MetricsPanel stats={stats} heading="Last 24 hours" />
 			</div>
 		</div>
 

@@ -16,7 +16,7 @@ from importlib import resources
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
 from pydantic import BaseModel
 from google.oauth2.credentials import Credentials as OAuthCredentials
 import asyncio
@@ -520,6 +520,28 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             "X-Accel-Buffering": "no"  # Disable Nginx buffering
         }
     )
+
+
+@app.get("/widget")
+async def serve_widget() -> HTMLResponse:
+    """
+    Serve the embeddable chat widget HTML.
+
+    This can be embedded in Google Sheets or used as a standalone chat interface.
+    """
+    widget_path = Path(__file__).parent / "widget.html"
+
+    try:
+        with open(widget_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+
+        return HTMLResponse(content=html_content)
+    except FileNotFoundError:
+        logger.error(f"Widget HTML not found at {widget_path}")
+        raise HTTPException(status_code=404, detail="Widget HTML not found")
+    except Exception as e:
+        logger.error(f"Error serving widget: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error loading widget")
 
 
 # * ============================================================================

@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <style>
+      /* --- Reset & Base --- */
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background: #f1f3f4;
+        color: #202124;
+      }
+
+      /* --- Layout --- */
+      .copilot-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        box-sizing: border-box;
+        background: #ffffff;
+      }
+
+      /* --- Top bar --- */
+      .top-bar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 8px 12px;
+        border-bottom: 1px solid #e8eaed;
+      }
+
+      .menu-wrapper {
+        position: relative;
+      }
+
+      .menu-button {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .menu-button:hover {
+        background: rgba(60, 64, 67, 0.08);
+      }
+
+      .menu-dots {
+        font-size: 18px;
+        line-height: 1;
+        color: #5f6368;
+      }
+
+      .menu-dropdown {
+        position: absolute;
+        right: 0;
+        top: 32px;
+        min-width: 140px;
+        background: #ffffff;
+        border-radius: 6px;
+        box-shadow: 0 2px 6px rgba(60, 64, 67, 0.15);
+        border: 1px solid rgba(60, 64, 67, 0.1);
+        padding: 4px 0;
+        z-index: 10;
+        display: none;
+      }
+
+      .menu-dropdown.menu-open {
+        display: block;
+      }
+
+      .menu-item {
+        width: 100%;
+        padding: 8px 16px;
+        border: none;
+        background: transparent;
+        text-align: left;
+        font-size: 13px;
+        color: #202124;
+        cursor: pointer;
+      }
+
+      .menu-item:hover {
+        background: rgba(60, 64, 67, 0.08);
+      }
+
+      /* --- Chat Window --- */
+      .chat-window {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 16px;
+        background: #ffffff;
+      }
+
+      /* --- Custom Scrollbar --- */
+      .chat-window::-webkit-scrollbar {
+        width: 6px;
+      }
+      .chat-window::-webkit-scrollbar-track {
+        background: transparent;
+        margin: 4px 0;
+      }
+      .chat-window::-webkit-scrollbar-thumb {
+        background: #dadce0;
+        border-radius: 3px;
+      }
+      .chat-window::-webkit-scrollbar-thumb:hover {
+        background: #bdc1c6;
+      }
+
+      .chat-row {
+        display: flex;
+        margin-bottom: 12px;
+      }
+
+      .chat-row--user {
+        justify-content: flex-end;
+      }
+
+      .chat-row--bot,
+      .chat-row--issue {
+        justify-content: flex-start;
+      }
+
+      .chat-bubble {
+        max-width: 80%;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 13.5px;
+        line-height: 1.5;
+        word-wrap: break-word;
+        white-space: pre-wrap;
+      }
+
+      /* Lighter user bubble */
+      .chat-bubble--user {
+        background: #e6f4ea;
+        color: #0d8143;
+        border-bottom-right-radius: 2px;
+      }
+
+      /* Cleaner bot bubble */
+      .chat-bubble--bot {
+        background: #f1f3f4;
+        color: #202124;
+        border: none;
+        border-bottom-left-radius: 2px;
+      }
+
+      /* --- AI Typing Indicator --- */
+      .chat-bubble--typing {
+        padding: 14px 16px;
+      }
+
+      .typing-dots {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .typing-dots span {
+        width: 8px;
+        height: 8px;
+        background-color: #9aa0a6;
+        border-radius: 50%;
+        animation: typing-jump 1.2s infinite ease-in-out;
+      }
+
+      .typing-dots span:nth-child(1) {
+        animation-delay: 0s;
+      }
+      .typing-dots span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .typing-dots span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes typing-jump {
+        0%,
+        80%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.4;
+        }
+        40% {
+          transform: translateY(-4px);
+          opacity: 1;
+        }
+      }
+
+      /* --- Sleek Input Area --- */
+      .input-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-end;
+        padding: 12px 16px;
+        background: #ffffff;
+        border-top: 1px solid #e8eaed;
+      }
+
+      .input-row textarea {
+        flex: 1;
+        resize: none;
+        min-height: 42px;
+        max-height: 140px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid #dadce0;
+        background: #ffffff;
+        color: #202124;
+        font-size: 14px;
+        font-family: inherit;
+        box-sizing: border-box;
+        transition: all 0.2s ease;
+        line-height: 1.5;
+      }
+
+      .input-row textarea::placeholder {
+        color: #9aa0a6;
+      }
+
+      .input-row textarea:focus {
+        outline: none;
+        border-color: #0f9d58;
+        box-shadow: 0 0 0 2px rgba(15, 157, 88, 0.1);
+      }
+
+      /* Icon Button */
+      .input-row button {
+        border: none;
+        border-radius: 8px;
+        padding: 0;
+        font-size: 14px;
+        cursor: pointer;
+        background: transparent;
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 42px;
+        height: 42px;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+      }
+
+      .input-row button svg {
+        width: 20px;
+        height: 20px;
+        transition: fill 0.2s ease;
+      }
+
+      .input-row button:hover:not(:disabled) {
+        background: #f1f3f4;
+      }
+
+      .input-row button:disabled {
+        cursor: default;
+      }
+
+      /* --- Issue Cards (Sleek update) --- */
+      .issue-card {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: #ffffff;
+        border: 1px solid #e8eaed;
+        border-left: 3px solid;
+        font-size: 12px;
+        color: #202124;
+        box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+        transition: all 0.2s ease;
+      }
+
+      .issue-card:hover {
+        box-shadow: 0 2px 4px rgba(60, 64, 67, 0.12);
+      }
+
+      .issue-card--resolved {
+        opacity: 0.6;
+        background: #f8f9fa;
+        border-style: dashed;
+      }
+
+      .issue-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+
+      .issue-pill {
+        font-size: 10px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: #f1f3f4;
+        color: #5f6368;
+        font-weight: 500;
+        white-space: nowrap;
+        letter-spacing: 0.2px;
+      }
+
+      .issue-severity-badge {
+        font-size: 9px;
+        padding: 2px 7px;
+        border-radius: 8px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        white-space: nowrap;
+      }
+
+      .issue-severity-critical {
+        background: #fce8e6;
+        color: #c5221f;
+      }
+      .issue-severity-high {
+        background: #fef7e0;
+        color: #ea8600;
+      }
+      .issue-severity-medium {
+        background: #fff4e5;
+        color: #f9ab00;
+      }
+      .issue-severity-low {
+        background: #e8f0fe;
+        color: #1967d2;
+      }
+
+      .issue-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #202124;
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+
+      .issue-actions {
+        display: flex;
+        gap: 6px;
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid #f1f3f4;
+      }
+
+      /* Modern buttons */
+      .issue-btn {
+        flex: 1;
+        padding: 7px 12px;
+        font-size: 11.5px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        white-space: nowrap;
+        font-weight: 600;
+        transition: all 0.2s ease;
+      }
+
+      .issue-btn-fix {
+        background: #0d8143;
+        color: #ffffff;
+      }
+      .issue-btn-fix:hover:not(:disabled) {
+        background: #0a6b3a;
+      }
+
+      .issue-btn-ignore {
+        background: #f1f3f4;
+        color: #5f6368;
+        border: none;
+      }
+      .issue-btn-ignore:hover:not(:disabled) {
+        background: #e8eaed;
+      }
+
+      .issue-btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .issue-status {
+        font-size: 10px;
+        color: #9aa0a6;
+        margin-top: 8px;
+        font-style: italic;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="copilot-container">
+      <div class="top-bar">
+        <div class="menu-wrapper">
+          <button
+            type="button"
+            class="menu-button"
+            id="menu-button"
+            aria-label="More options"
+          >
+            <span class="menu-dots">⋮</span>
+          </button>
+          <div class="menu-dropdown" id="options-menu">
+            <button type="button" class="menu-item" data-action="clear-chat">
+              Clear chat
+            </button>
+            <button type="button" class="menu-item" data-action="quit">
+              Quit
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div id="chat" class="chat-window"></div>
+
+      <form id="chat-form" class="input-row">
+        <textarea
+          id="user-input"
+          rows="1"
+          placeholder="Ask about this sheet, formulas, or issues…"
+        ></textarea>
+        <button id="send-btn" type="submit" title="Send message">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            width="20"
+            height="20"
+          >
+            <path
+              d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2 .01 7z"
+              fill="#9aa0a6"
+            ></path>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    <script>
+      (function () {
+        const chatEl = document.getElementById("chat");
+        const formEl = document.getElementById("chat-form");
+        const inputEl = document.getElementById("user-input");
+        const sendBtnEl = document.getElementById("send-btn");
+        const sendBtnSvg = sendBtnEl.querySelector("svg path");
+        const menuButtonEl = document.getElementById("menu-button");
+        const optionsMenuEl = document.getElementById("options-menu");
+
+        const SVG_COLOR_DISABLED = "#9aa0a6";
+        const SVG_COLOR_ENABLED = "#0f9d58";
+        const TYPING_INDICATOR_ID = "typing-indicator";
+        const API_BASE_URL = "https://fintech-hackathon-production.up.railway.app";
+
+        let currentStreamController = null;
+        let sessionId = null;
+
+        document.addEventListener("DOMContentLoaded", function () {
+          loadSpreadsheetInfo();
+          setInitialButtonState();
+          autoGrow(inputEl);
+        });
+
+        function setInitialButtonState() {
+          sendBtnEl.disabled = true;
+          if (sendBtnSvg) sendBtnSvg.setAttribute("fill", SVG_COLOR_DISABLED);
+        }
+
+        /* --- Auto-resize textarea --- */
+        function autoGrow(element) {
+          element.style.height = "auto";
+          element.style.height = element.scrollHeight + "px";
+        }
+        inputEl.addEventListener("input", () => autoGrow(inputEl));
+
+        /* --- Generate IDs --- */
+        function generateMessageId() {
+          return "msg_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        }
+
+        function generateSessionId() {
+          return "session_sheets_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+        }
+
+        /* --- Load initial info --- */
+        function loadSpreadsheetInfo() {
+          google.script.run
+            .withSuccessHandler(function (info) {
+              addGreeting(info);
+              scrollToBottom();
+            })
+            .withFailureHandler(function (err) {
+              addGreeting({
+                url: "Unable to get spreadsheet URL",
+                name: "Unknown",
+              });
+              scrollToBottom();
+            })
+            .getSpreadsheetInfo();
+        }
+
+        function addGreeting(spreadsheetInfo) {
+          const row = document.createElement("div");
+          row.className = "chat-row chat-row--bot";
+
+          const bubble = document.createElement("div");
+          bubble.className = "chat-bubble chat-bubble--bot";
+
+          var parts = [
+            document.createTextNode("Hi, I'm your Sheet Mangler assistant.\n\n"),
+          ];
+          parts.push(
+            document.createTextNode(
+              "I can help you analyze your spreadsheet, detect issues, and apply fixes. Tell me what you're working on!"
+            )
+          );
+
+          parts.forEach(function (part) {
+            bubble.appendChild(part);
+          });
+
+          row.appendChild(bubble);
+          chatEl.appendChild(row);
+        }
+
+        /* --- Options menu --- */
+        menuButtonEl.addEventListener("click", function (e) {
+          e.stopPropagation();
+          optionsMenuEl.classList.toggle("menu-open");
+        });
+
+        document.addEventListener("click", function () {
+          optionsMenuEl.classList.remove("menu-open");
+        });
+
+        optionsMenuEl.addEventListener("click", function (e) {
+          const action =
+            e.target && e.target.dataset ? e.target.dataset.action : null;
+          if (!action) return;
+
+          e.stopPropagation();
+          optionsMenuEl.classList.remove("menu-open");
+
+          if (action === "clear-chat") {
+            chatEl.innerHTML = "";
+            addBotMessage("Chat cleared.");
+            scrollToBottom();
+            sessionId = null; // Reset session on clear
+          }
+
+          if (action === "quit") {
+            if (
+              google &&
+              google.script &&
+              google.script.host &&
+              google.script.host.close
+            ) {
+              google.script.host.close();
+            }
+          }
+        });
+
+        /* --- Handle Enter-to-Send --- */
+        inputEl.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            if (inputEl.value.trim().length > 0) {
+              formEl.dispatchEvent(new Event("submit", { cancelable: true }));
+            }
+          }
+        });
+
+        /* --- Handle dynamic send button state --- */
+        inputEl.addEventListener("input", function () {
+          if (!inputEl.disabled) {
+            if (inputEl.value.trim().length > 0) {
+              sendBtnEl.disabled = false;
+              if (sendBtnSvg)
+                sendBtnSvg.setAttribute("fill", SVG_COLOR_ENABLED);
+            } else {
+              sendBtnEl.disabled = true;
+              if (sendBtnSvg)
+                sendBtnSvg.setAttribute("fill", SVG_COLOR_DISABLED);
+            }
+          }
+          autoGrow(inputEl);
+        });
+
+        /* --- Streaming handler --- */
+        async function handleStreamResponse(response) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let currentMessage = null;
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
+                  if (data === '[DONE]') continue;
+
+                  try {
+                    const chunk = JSON.parse(data);
+
+                    switch (chunk.type) {
+                      case 'session':
+                        sessionId = chunk.sessionId;
+                        break;
+
+                      case 'content':
+                        if (!currentMessage) {
+                          removeTypingIndicator();
+                          currentMessage = document.createElement('div');
+                          currentMessage.className = 'chat-bubble chat-bubble--bot';
+
+                          const row = document.createElement('div');
+                          row.className = 'chat-row chat-row--bot';
+                          row.appendChild(currentMessage);
+                          chatEl.appendChild(row);
+                        }
+                        currentMessage.textContent = (currentMessage.textContent || '') + chunk.content;
+                        scrollToBottom();
+                        break;
+
+                      case 'tool':
+                        if (chunk.metadata?.payload?.potential_errors) {
+                          addIssueCards(chunk.metadata.payload.potential_errors);
+                        }
+                        break;
+
+                      case 'error':
+                        removeTypingIndicator();
+                        addBotMessage('Error: ' + chunk.error);
+                        break;
+
+                      case 'done':
+                        removeTypingIndicator();
+                        break;
+                    }
+                  } catch (e) {
+                    console.error('Parse error:', e);
+                  }
+                }
+              }
+            }
+          } finally {
+            reader.releaseLock();
+          }
+        }
+
+        /* --- Chat submit with streaming --- */
+        formEl.addEventListener("submit", async function (e) {
+          e.preventDefault();
+          const text = (inputEl.value || "").trim();
+          if (!text) return;
+
+          addUserMessage(text);
+          inputEl.value = "";
+          autoGrow(inputEl);
+          disableInput(true);
+          addTypingIndicator();
+          scrollToBottom();
+
+          // Generate session ID if needed
+          if (!sessionId) {
+            sessionId = generateSessionId();
+          }
+
+          // Get spreadsheet context
+          const spreadsheetInfo = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getSpreadsheetInfo();
+          });
+
+          const activeSheet = SpreadsheetApp.getActiveSheet();
+          const sheetTitle = activeSheet ? activeSheet.getName() : 'Sheet1';
+
+          try {
+            // Abort any existing stream
+            if (currentStreamController) {
+              currentStreamController.abort();
+            }
+
+            currentStreamController = new AbortController();
+
+            const response = await fetch(API_BASE_URL + '/chat/stream', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                messages: [{
+                  id: generateMessageId(),
+                  role: 'user',
+                  content: text
+                }],
+                sheetContext: {
+                  spreadsheetId: spreadsheetInfo.url,
+                  sheetTitle: sheetTitle
+                },
+                sessionId: sessionId
+              }),
+              signal: currentStreamController.signal
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            await handleStreamResponse(response);
+          } catch (error) {
+            removeTypingIndicator();
+            if (error.name !== 'AbortError') {
+              addBotMessage("Oops, something went wrong: " + error.message);
+            }
+          } finally {
+            disableInput(false);
+            scrollToBottom();
+            currentStreamController = null;
+          }
+        });
+
+        /* --- Issue button handling --- */
+        chatEl.addEventListener("click", function (e) {
+          const target = e.target;
+          const button = target.closest(".issue-btn");
+
+          if (!button) return;
+
+          const card = button.closest(".issue-card");
+          if (!card || card.classList.contains("issue-card--resolved")) return;
+
+          const action = button.dataset.action;
+          const cellLocation = card.dataset.cellLocation;
+          const issueData = card.dataset.issueData
+            ? JSON.parse(card.dataset.issueData)
+            : null;
+
+          if (action === "fix") {
+            // Send fix request via streaming
+            inputEl.value = `Fix this issue:\n\nLocation: ${issueData.cell_location}\nSeverity: ${issueData.severity}\nIssue: ${issueData.title}\n${issueData.description ? `Description: ${issueData.description}` : ''}\n\nPlease apply the appropriate fix.`;
+            formEl.dispatchEvent(new Event("submit", { cancelable: true }));
+            card.classList.add("issue-card--resolved");
+          } else if (action === "ignore") {
+            card.classList.add("issue-card--resolved");
+            const statusEl = card.querySelector(".issue-status");
+            if (statusEl) statusEl.textContent = "Ignored";
+          }
+        });
+
+        /* --- Chat rendering helpers --- */
+
+        function addUserMessage(text) {
+          const row = document.createElement("div");
+          row.className = "chat-row chat-row--user";
+
+          const bubble = document.createElement("div");
+          bubble.className = "chat-bubble chat-bubble--user";
+          bubble.textContent = text;
+
+          row.appendChild(bubble);
+          chatEl.appendChild(row);
+        }
+
+        function addBotMessage(text) {
+          const row = document.createElement("div");
+          row.className = "chat-row chat-row--bot";
+
+          const bubble = document.createElement("div");
+          bubble.className = "chat-bubble chat-bubble--bot";
+          bubble.textContent = text;
+
+          row.appendChild(bubble);
+          chatEl.appendChild(row);
+        }
+
+        function addTypingIndicator() {
+          if (document.getElementById(TYPING_INDICATOR_ID)) return;
+
+          const row = document.createElement("div");
+          row.className = "chat-row chat-row--bot";
+          row.id = TYPING_INDICATOR_ID;
+
+          const bubble = document.createElement("div");
+          bubble.className = "chat-bubble chat-bubble--bot chat-bubble--typing";
+
+          bubble.innerHTML =
+            '<div class="typing-dots">' +
+            "<span></span><span></span><span></span>" +
+            "</div>";
+
+          row.appendChild(bubble);
+          chatEl.appendChild(row);
+        }
+
+        function removeTypingIndicator() {
+          const indicator = document.getElementById(TYPING_INDICATOR_ID);
+          if (indicator) {
+            indicator.remove();
+          }
+        }
+
+        function addIssueCards(issues) {
+          issues.forEach(function (issue) {
+            const row = document.createElement("div");
+            row.className = "chat-row chat-row--issue";
+
+            const card = document.createElement("div");
+            card.className = "issue-card";
+            card.dataset.cellLocation = issue.cell_location || "";
+            card.dataset.issueData = JSON.stringify(issue);
+            card.style.borderLeftColor = issue.color || "#f97316";
+
+            const safeSeverity = (issue.severity || "medium").toLowerCase();
+
+            card.innerHTML =
+              '<div class="issue-meta-row">' +
+              '<span class="issue-pill">' + (issue.cell_location || "") + '</span>' +
+              '<span class="issue-severity-badge issue-severity-' + safeSeverity + '">' +
+              safeSeverity + '</span>' +
+              '</div>' +
+              '<div class="issue-title">' + (issue.title || "Issue") + '</div>' +
+              '<div class="issue-actions">' +
+              '<button type="button" class="issue-btn issue-btn-fix" data-action="fix">Fix with AI</button>' +
+              '<button type="button" class="issue-btn issue-btn-ignore" data-action="ignore">Ignore</button>' +
+              '</div>' +
+              '<div class="issue-status"></div>';
+
+            row.appendChild(card);
+            chatEl.appendChild(row);
+          });
+        }
+
+        function scrollToBottom() {
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        function disableInput(disabled) {
+          inputEl.disabled = disabled;
+          sendBtnEl.disabled = disabled;
+
+          if (disabled) {
+            if (sendBtnSvg) sendBtnSvg.setAttribute("fill", SVG_COLOR_DISABLED);
+          } else {
+            if (inputEl.value.trim().length > 0) {
+              sendBtnEl.disabled = false;
+              if (sendBtnSvg)
+                sendBtnSvg.setAttribute("fill", SVG_COLOR_ENABLED);
+            } else {
+              sendBtnEl.disabled = true;
+              if (sendBtnSvg)
+                sendBtnSvg.setAttribute("fill", SVG_COLOR_DISABLED);
+            }
+            inputEl.focus();
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>
