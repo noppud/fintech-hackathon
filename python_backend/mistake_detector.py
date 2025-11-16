@@ -176,6 +176,19 @@ class MistakeDetector:
     try:
       context_str = format_sheet_context(context)
       sample_ranges = context.get("sampleData") or []
+
+      # DEBUG: Log sampleData structure
+      logger.info(f"DEBUG: sampleData type: {type(sample_ranges)}, length: {len(sample_ranges)}")
+      if sample_ranges:
+        logger.info(f"DEBUG: First element type: {type(sample_ranges[0])}")
+        logger.info(f"DEBUG: First element keys: {sample_ranges[0].keys() if isinstance(sample_ranges[0], dict) else 'not a dict'}")
+        values = sample_ranges[0].get("values") if isinstance(sample_ranges[0], dict) else []
+        logger.info(f"DEBUG: Values type: {type(values)}, length: {len(values) if values else 0}")
+        if values and len(values) > 0:
+          logger.info(f"DEBUG: First row type: {type(values[0])}, length: {len(values[0]) if values[0] else 0}")
+          if values[0] and len(values[0]) > 0:
+            logger.info(f"DEBUG: First cell: {values[0][0]}")
+
       if sample_ranges:
         sample_data_str = format_sample_data(sample_ranges[0].get("values") or [])
       else:
@@ -187,8 +200,8 @@ class MistakeDetector:
       logger.info("=== MISTAKE DETECTION PROMPT ===")
       logger.info(f"Context length: {len(context_str)} chars")
       logger.info(f"Sample data length: {len(sample_data_str)} chars")
-      logger.info(f"Sample data preview (first 500 chars):\n{sample_data_str[:500]}")
-      logger.info(f"Full user prompt (first 1000 chars):\n{user_prompt[:1000]}")
+      logger.info(f"Sample data preview (first 1000 chars):\n{sample_data_str[:1000]}")
+      logger.info(f"Full user prompt (first 2000 chars):\n{user_prompt[:2000]}")
       logger.info("=== END PROMPT ===")
 
       response = self.llm_client.chat_json(
