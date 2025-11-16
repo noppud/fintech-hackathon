@@ -366,31 +366,40 @@ class MistakeDetector:
             or issue.get("title")
             or "Unknown location"
           )
+
+          # CRITICAL FIX: Split comma-separated cell references into individual cells
+          # LLM sometimes returns "H26, V26, I51" which is invalid for Google Sheets API
+          # Split by comma and create separate entries for each cell
+          cell_locations = [loc.strip() for loc in cell_location.split(",") if loc.strip()]
+
           message = (
             issue.get("description")
             or issue.get("title")
             or "Potential issue detected in the sheet."
           )
-          potential_errors.append(
-            {
-              # Original minimal fields used by the Sheets highlighter
-              "cell_location": cell_location,
-              "message": message,
-              "color": color,
-              "url": spreadsheet_url,  # Add spreadsheet URL for color API
-              # Enriched metadata so this becomes the single source of truth
-              "issue_id": issue.get("id"),
-              "category": issue.get("category"),
-              "severity": issue.get("severity"),
-              "title": issue.get("title"),
-              "description": issue.get("description"),
-              "suggestedFix": issue.get("suggestedFix"),
-              "autoFixable": issue.get("autoFixable"),
-              "detectedBy": issue.get("detectedBy"),
-              "confidence": issue.get("confidence"),
-              "range": r,
-            }
-          )
+
+          # Create one potential_error entry per cell location
+          for individual_cell in cell_locations:
+            potential_errors.append(
+              {
+                # Original minimal fields used by the Sheets highlighter
+                "cell_location": individual_cell,
+                "message": message,
+                "color": color,
+                "url": spreadsheet_url,  # Add spreadsheet URL for color API
+                # Enriched metadata so this becomes the single source of truth
+                "issue_id": issue.get("id"),
+                "category": issue.get("category"),
+                "severity": issue.get("severity"),
+                "title": issue.get("title"),
+                "description": issue.get("description"),
+                "suggestedFix": issue.get("suggestedFix"),
+                "autoFixable": issue.get("autoFixable"),
+                "detectedBy": issue.get("detectedBy"),
+                "confidence": issue.get("confidence"),
+                "range": {**r, "a1Notation": individual_cell},  # Update a1Notation for this specific cell
+              }
+            )
       else:
         # Fallback when no ranges are provided
         cell_location = issue.get("title") or "Unknown location"
