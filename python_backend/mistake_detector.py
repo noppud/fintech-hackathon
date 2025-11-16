@@ -6,6 +6,9 @@ from typing import Any, Dict, List
 
 from .context_builder import ContextBuilder
 from .llm import LLMClient, PROMPTS, format_sample_data, format_sheet_context
+from .logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class MistakeDetector:
@@ -179,6 +182,14 @@ class MistakeDetector:
         sample_data_str = "No sample data"
 
       user_prompt = PROMPTS.MISTAKE_DETECTION.user(context_str, sample_data_str)
+
+      # DEBUG: Log the actual prompt being sent
+      logger.info("=== MISTAKE DETECTION PROMPT ===")
+      logger.info(f"Context length: {len(context_str)} chars")
+      logger.info(f"Sample data length: {len(sample_data_str)} chars")
+      logger.info(f"Sample data preview (first 500 chars):\n{sample_data_str[:500]}")
+      logger.info(f"Full user prompt (first 1000 chars):\n{user_prompt[:1000]}")
+      logger.info("=== END PROMPT ===")
 
       response = self.llm_client.chat_json(
         [
