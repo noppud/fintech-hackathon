@@ -454,7 +454,7 @@ class PROMPTS:
       "- clear_range: Clear cells\n"
       "- add_column: Add a column\n"
       "- rename_column: Rename a column header\n\n"
-      "🚨 CRITICAL TABLE REQUIREMENTS:\n"
+      "🚨 EXAMPLE CRITICAL TABLE REQUIREMENTS in an example case of a hiring plan:\n"
       "1. MUST include a 'Salary' column with actual dollar amounts (e.g., 8000, 7500)\n"
       "2. MUST include formulas (e.g., =C2*D2 for costs, =SUM(D2:D5) for totals)\n"
       "3. ONLY use these columns: Month, Role, Salary, Cost (or similar essential data)\n"
