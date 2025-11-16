@@ -6,10 +6,9 @@
 	};
 
 	export let stats: Metrics | undefined;
-	export let className = '';
-	export let heading = 'Last 24 hours';
-	export let onlineLabel = 'Live telemetry';
-	export let offlineLabel = 'Metrics unavailable';
+export let heading = 'Last 24 hours';
+export let onlineLabel = 'Live telemetry';
+export let offlineLabel = 'Metrics unavailable';
 
 	const metrics = stats ?? {
 		available: false,
@@ -18,7 +17,7 @@
 	};
 </script>
 
-<div class={`metrics-panel ${className}`.trim()}>
+<div class="metrics-panel">
 	<div class="metrics-panel__header">
 		<span>{heading}</span>
 		<span class="metrics-panel__status-dot" aria-hidden="true"></span>

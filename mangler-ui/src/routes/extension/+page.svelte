@@ -750,12 +750,6 @@
 		color: #aefcd5;
 	}
 
-	.tester-notice--error {
-		background: rgba(248, 113, 113, 0.12);
-		border: 1px solid rgba(248, 113, 113, 0.35);
-		color: #fecaca;
-	}
-
 	.tester-notice--warning {
 		background: rgba(251, 191, 36, 0.12);
 		border: 1px solid rgba(251, 191, 36, 0.4);

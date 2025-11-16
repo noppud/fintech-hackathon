@@ -61,10 +61,9 @@
 		<div class="dashboard__stack">
 			<MetricsPanel
 				stats={{ available: true, users24h: 12, sheets24h: 89 }}
-				className="dashboard__panel"
 				heading="Today's Activity"
 				onlineLabel="Live tracking"
-				offlineNote={telemetryStatus}
+				offlineLabel={telemetryStatus}
 			/>
 
 			<div class="dashboard__card dashboard__card--status">
@@ -344,10 +343,6 @@
 		gap: 1.5rem;
 	}
 
-	.dashboard__panel {
-		width: 100%;
-	}
-
 	.dashboard__card {
 		padding: 1.75rem;
 		border-radius: 1.5rem;
@@ -544,11 +539,23 @@
 
 		.dashboard__actions {
 			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.dashboard__btn-row {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.dashboard__actions .dashboard__btn,
+		.dashboard__btn-row .dashboard__btn {
+			width: 100%;
 		}
 
 		.about-section__actions {
 			flex-direction: column;
 			width: 100%;
+			align-items: stretch;
 		}
 
 		.about-section__actions .dashboard__btn {
