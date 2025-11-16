@@ -345,8 +345,14 @@ function getOrCreateSessionId(spreadsheetId) {
   var SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hour in milliseconds
 
   // Create new session if: no session exists OR session is older than 1 hour
-  if (!sessionId || !timestamp || (now - parseInt(timestamp)) > SESSION_TIMEOUT) {
-    sessionId = "session_" + spreadsheetId + "_" + now + "_" + Math.random().toString(36).substr(2, 9);
+  if (!sessionId || !timestamp || now - parseInt(timestamp) > SESSION_TIMEOUT) {
+    sessionId =
+      "session_" +
+      spreadsheetId +
+      "_" +
+      now +
+      "_" +
+      Math.random().toString(36).substr(2, 9);
     properties.setProperty(sessionKey, sessionId);
     properties.setProperty(timestampKey, now.toString());
     Logger.log("Created new session (timeout/first-time): " + sessionId);
