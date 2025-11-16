@@ -389,13 +389,14 @@ class AgentOrchestrator:
           raise RuntimeError(f"Failed to read sheet: {exc}")
 
       elif tool_name == "visualize_formulas":
-        # Import the core visualize_formulas function directly (not the async endpoint)
-        try:
-          from tools.visualize_formulas import visualize_formulas
-        except ImportError:
+        # Import from api module where it's already imported with proper error handling
+        from . import api
+
+        if api.visualize_formulas is None:
           raise RuntimeError(
             "visualize_formulas tool is not available. "
-            "Ensure tools.visualize_formulas module is installed."
+            "The tools.visualize_formulas module is not installed or accessible. "
+            "This tool requires Google Sheets API credentials to be configured."
           )
 
         # Parse the spreadsheet URL to extract ID and gid
@@ -406,7 +407,7 @@ class AgentOrchestrator:
 
         # Call the core function directly (synchronous)
         try:
-          result = visualize_formulas(sheet_url=raw_id)
+          result = api.visualize_formulas(sheet_url=raw_id)
         except Exception as exc:
           logger.error(f"visualize_formulas failed: {str(exc)}", exc_info=True)
           raise RuntimeError(f"Failed to visualize formulas: {exc}")
