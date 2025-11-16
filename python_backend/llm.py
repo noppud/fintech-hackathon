@@ -500,20 +500,28 @@ class PROMPTS:
   class SHEET_CREATION:
     system: str = (
       "You are an expert spreadsheet designer. Create simple, focused spreadsheet structures based on user requirements.\n\n"
-      "DESIGN PRINCIPLES:\n"
-      "- Keep it SIMPLE: Use only essential columns\n"
-      "- Include NUMERICAL DATA: For financial/hiring/budget sheets, always include monetary values (salary, cost, price, revenue)\n"
-      "- Include FORMULAS: Add calculations (SUM, multiplication, etc.) where appropriate\n"
-      "- Avoid UNNECESSARY columns: Skip meta-columns like 'Notes', 'Phase', 'Status', 'Seniority Level' unless explicitly requested\n"
-      "- Provide REALISTIC example data with actual numbers\n\n"
+      "🔥 CRITICAL DESIGN PRINCIPLES:\n"
+      "1. Keep it SIMPLE: Use only essential columns\n"
+      "2. Include NUMERICAL DATA: For financial/hiring/budget sheets, ALWAYS include monetary values (salary, cost, price, revenue)\n"
+      "3. 🔥 MUST INCLUDE FORMULAS: Spreadsheets are useless without formulas!\n"
+      "   - Add calculated columns (Cost = Headcount × Salary → use formula =C2*D2)\n"
+      "   - Add summary rows (Total Cost → use formula =SUM(E2:E10))\n"
+      "   - NEVER just hardcode calculated values - USE FORMULAS\n"
+      "4. Avoid UNNECESSARY columns: Skip meta-columns like 'Notes', 'Phase', 'Status', 'Seniority Level' unless explicitly requested\n"
+      "5. Provide REALISTIC example data with actual numbers AND formulas in exampleRows\n\n"
       "EXAMPLES:\n\n"
-      "❌ BAD - No monetary data:\n"
+      "❌ BAD #1 - No monetary data:\n"
       'Columns: ["Month", "Role", "Seniority Level", "Headcount", "Notes"]\n'
       "Missing: Salary, Cost (no monetary values!)\n\n"
-      "✅ GOOD - Has numbers and formulas:\n"
+      "❌ BAD #2 - No formulas:\n"
+      'Columns: ["Month", "Role", "Salary", "Cost"]\n'
+      'exampleRows: [[1, "Engineer", 8000, 8000]]\n'
+      "Missing: Cost should be a FORMULA (=C2*D2), not hardcoded 8000!\n\n"
+      "✅ GOOD - Has numbers AND formulas:\n"
       'Columns: ["Month", "Role", "Headcount", "Salary", "Cost"]\n'
-      'Example row: [1, "Engineer", 1, 8000, "=C2*D2"]\n'
-      "Includes: Actual salaries + formula for calculated cost\n\n"
+      'exampleRows: [[1, "Engineer", 1, 8000, "=C2*D2"], [2, "PM", 1, 7000, "=C3*D3"]]\n'
+      'Plus summary row: ["Total", "", "", "", "=SUM(E2:E3)"]\n'
+      "Includes: Actual salaries + FORMULAS for costs + SUM formula for total\n\n"
       "Return a JSON plan with:\n"
       "{\n"
       '  "title": "spreadsheet title",\n'
@@ -526,17 +534,19 @@ class PROMPTS:
       '          "name": "column name",\n'
       '          "type": "string | number | boolean | date | formula",\n'
       '          "validation": "optional validation rule",\n'
-      '          "formula": "optional formula template like =C2*D2"\n'
+      '          "formula": "formula template like =C2*D2 (REQUIRED for calculated columns!)"\n'
       "        }\n"
       "      ],\n"
       '      "exampleRows": [\n'
-      '        ["value1", 8000, "=A1*B1", ...]  // Include actual numbers and formulas\n'
+      '        [1, "Engineer", 1, 8000, "=C2*D2"],  // MUST include formulas!\n'
+      '        [2, "PM", 1, 7000, "=C3*D3"],\n'
+      '        ["Total", "", "", "", "=SUM(E2:E3)"]  // Summary with SUM formula\n'
       "      ]\n"
       "    }\n"
       "  ],\n"
       '  "documentation": "optional readme content"\n'
       "}\n\n"
-      "Remember: Simple structure, essential columns, include numbers and formulas."
+      "🔥 MANDATORY: exampleRows MUST include formulas for calculated values and summary rows. NO hardcoded calculations!"
     )
 
     @staticmethod
