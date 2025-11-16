@@ -389,25 +389,66 @@ class AgentOrchestrator:
           raise RuntimeError(f"Failed to read sheet: {exc}")
 
       elif tool_name == "visualize_formulas":
-        # Import from api module where it's already imported with proper error handling
+        # Import the visualization tool from python_backend package
+        from .visualize_tool import visualize_formulas as viz_fn
         from . import api
 
-        if api.visualize_formulas is None:
+        # Check if Google Sheets validator is available
+        if api.GoogleSheetsFormulaValidator is None:
           raise RuntimeError(
-            "visualize_formulas tool is not available. "
-            "The tools.visualize_formulas module is not installed or accessible. "
-            "This tool requires Google Sheets API credentials to be configured."
+            "visualize_formulas tool requires Google Sheets API credentials. "
+            "Please configure GOOGLE_SERVICE_ACCOUNT_FILE or DEFAULT_CREDENTIALS_PATH."
           )
 
         # Parse the spreadsheet URL to extract ID and gid
         raw_id = args.get("spreadsheetId") or sheet_context.spreadsheetId or ""
+        parsed = parse_spreadsheet_url(raw_id)
+        spreadsheet_id = parsed["spreadsheet_id"]
+        gid = parsed["gid"]
 
-        if not raw_id:
+        if not spreadsheet_id:
           raise ValueError("Missing spreadsheet ID for visualize_formulas")
 
-        # Call the core function directly (synchronous)
+        # Get sheet title (resolve from gid if needed)
+        sheet_title = args.get("sheetTitle") or sheet_context.sheetTitle
+        if not sheet_title and gid:
+          sheet_title = self.sheets_client.get_sheet_title_by_gid(spreadsheet_id, gid)
+
+        if not sheet_title:
+          raise ValueError("Missing sheet title for visualize_formulas")
+
+        # Create validator and get sheet metadata
         try:
-          result = api.visualize_formulas(sheet_url=raw_id)
+          validator = api.GoogleSheetsFormulaValidator(api.DEFAULT_CREDENTIALS_PATH)
+          spreadsheet = validator.fetch_spreadsheet(spreadsheet_id)
+
+          # Find the sheet
+          sheets = spreadsheet.get("sheets", [])
+          if gid is not None:
+            sheet = next((s for s in sheets if s["properties"].get("sheetId") == int(gid)), None)
+          else:
+            sheet = next((s for s in sheets if s["properties"].get("title") == sheet_title), None)
+
+          if not sheet:
+            raise ValueError(f"Sheet '{sheet_title}' not found")
+
+          sheet_id = sheet["properties"]["sheetId"]
+
+          # Define Supabase insert function
+          def insert_snapshots(rows):
+            from . import api as api_module
+            api_module._post_to_supabase(rows)
+
+          # Call visualization function
+          result = viz_fn(
+            validator=validator,
+            spreadsheet_id=spreadsheet_id,
+            sheet_title=sheet_title,
+            sheet_id=sheet_id,
+            gid=int(gid) if gid else None,
+            supabase_insert_fn=insert_snapshots,
+          )
+
         except Exception as exc:
           logger.error(f"visualize_formulas failed: {str(exc)}", exc_info=True)
           raise RuntimeError(f"Failed to visualize formulas: {exc}")
