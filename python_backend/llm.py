@@ -442,58 +442,45 @@ class PROMPTS:
 
   class MODIFICATION_PLAN:
     system: str = (
-      "You are a spreadsheet automation assistant. Create simple, robust tables with values and formulas.\n\n"
+      "You are a spreadsheet automation assistant. Modify sheets with values and formulas efficiently.\n\n"
       "🚫 CRITICAL: NO FORMATTING ACTIONS 🚫\n"
       "- ONLY insert VALUES and FORMULAS\n"
       "- NO bold, colors, fonts, number formats, or styling\n"
       "- Formatting actions will FAIL with 'Unsupported action type' error\n\n"
       "SUPPORTED ACTIONS:\n"
-      "- batch_update: Set multiple cells at once (values and/or formulas)\n"
+      "- batch_update: Set multiple cells at once (preferred for efficiency)\n"
       "- set_value: Set a single cell value\n"
       "- update_formula: Update formulas in a range\n"
       "- clear_range: Clear cells\n"
       "- add_column: Add a column\n"
       "- rename_column: Rename a column header\n\n"
-      "🚨 EXAMPLE CRITICAL TABLE REQUIREMENTS in an example case of a hiring plan:\n"
-      "1. MUST include a 'Salary' column with actual dollar amounts (e.g., 8000, 7500)\n"
-      "2. MUST include formulas (e.g., =C2*D2 for costs, =SUM(D2:D5) for totals)\n"
-      "3. ONLY use these columns: Month, Role, Salary, Cost (or similar essential data)\n"
-      "4. FORBIDDEN columns: Target Headcount, New Hires, Key Roles, Notes, Phase, Focus Area\n\n"
-      "❌ BAD EXAMPLE (NO SALARIES!):\n"
-      "Month | Target Headcount | New Hires | Key Roles | Notes  ← WRONG! No salary column!\n"
-      "1     | 2               | 1         | ML Engineer | Founder + first hire\n"
-      "2     | 3               | 1         | Backend Eng | Infrastructure\n\n"
-      "✅ GOOD EXAMPLE (HAS SALARIES AND FORMULAS!):\n"
-      "Month | Role            | Headcount | Salary | Cost\n"
-      "1     | CTO             | 1         | 8000   | =C2*D2\n"
-      "2     | ML Engineer     | 1         | 8400   | =C3*D3\n"
-      "3     | Full-Stack Eng  | 1         | 7500   | =C4*D4\n"
-      "SUMMARY\n"
-      "Total Cost: =SUM(D2:D4)\n\n"
-      "IMPLEMENTATION:\n"
+      "GUIDELINES:\n"
+      "- Use batch_update for multiple cell changes (more efficient)\n"
+      "- Be CAREFUL with formula cell references (e.g., =SUM(A2:A10), =B2*C2)\n"
+      "- Include numerical data where appropriate (prices, costs, quantities)\n"
+      "- Add formulas for calculations and totals\n"
+      "- If user asks for formatting (bold, colors), ignore it and only add the data\n\n"
+      "EXAMPLE - Adding a simple table:\n"
       "{\n"
-      '  "intent": "Create hiring table with salaries and formulas",\n'
+      '  "intent": "Add product table with prices and totals",\n'
       '  "actions": [{\n'
       '    "type": "batch_update",\n'
       '    "params": {\n'
       '      "updates": [\n'
-      '        {cell: "A1", value: "Month"},\n'
-      '        {cell: "B1", value: "Role"},\n'
-      '        {cell: "C1", value: "Headcount"},\n'
-      '        {cell: "D1", value: "Salary"},\n'
-      '        {cell: "E1", value: "Cost"},\n'
-      '        {cell: "A2", value: 1}, {cell: "B2", value: "CTO"},\n'
-      '        {cell: "C2", value: 1}, {cell: "D2", value: 8000},\n'
-      '        {cell: "E2", value: "=C2*D2", is_formula: true},\n'
-      '        {cell: "A3", value: 2}, {cell: "B3", value: "ML Engineer"},\n'
-      '        {cell: "C3", value: 1}, {cell: "D3", value: 8400},\n'
-      '        {cell: "E3", value: "=C3*D3", is_formula: true},\n'
-      '        {cell: "A4", value: 3}, {cell: "B4", value: "Full-Stack Engineer"},\n'
-      '        {cell: "C4", value: 1}, {cell: "D4", value: 7500},\n'
-      '        {cell: "E4", value: "=C4*D4", is_formula: true},\n'
-      '        {cell: "A6", value: "SUMMARY"},\n'
-      '        {cell: "A7", value: "Total Cost"},\n'
-      '        {cell: "B7", value: "=SUM(D2:D4)", is_formula: true}\n'
+      '        {cell: "A1", value: "Product"},\n'
+      '        {cell: "B1", value: "Price"},\n'
+      '        {cell: "C1", value: "Quantity"},\n'
+      '        {cell: "D1", value: "Total"},\n'
+      '        {cell: "A2", value: "Widget A"},\n'
+      '        {cell: "B2", value: 25.50},\n'
+      '        {cell: "C2", value: 10},\n'
+      '        {cell: "D2", value: "=B2*C2", is_formula: true},\n'
+      '        {cell: "A3", value: "Widget B"},\n'
+      '        {cell: "B3", value: 42.00},\n'
+      '        {cell: "C3", value: 5},\n'
+      '        {cell: "D3", value: "=B3*C3", is_formula: true},\n'
+      '        {cell: "A5", value: "Grand Total"},\n'
+      '        {cell: "D5", value: "=SUM(D2:D3)", is_formula: true}\n'
       "      ]}\n"
       "  }]\n"
       "}\n\n"
@@ -503,7 +490,7 @@ class PROMPTS:
       '  "actions": [{type: "...", params: {...}, description: "...", affectedRange: "..."}],\n'
       '  "warnings": []\n'
       "}\n\n"
-      "Remember: Be CAREFUL with formulas. If user asks for formatting, ignore it and only add data."
+      "Remember: NO formatting actions. Only data and formulas."
     )
 
     @staticmethod
@@ -512,13 +499,21 @@ class PROMPTS:
 
   class SHEET_CREATION:
     system: str = (
-      "You are an expert spreadsheet designer. Your task is to design Google Sheets structures based on user requirements.\n\n"
-      "Create a comprehensive spreadsheet design including:\n"
-      "- Multiple sheets/tabs if needed\n"
-      "- Column structure with appropriate data types\n"
-      "- Data validation rules where applicable\n"
-      "- Example formulas for calculations\n"
-      "- Sample rows to illustrate the structure\n\n"
+      "You are an expert spreadsheet designer. Create simple, focused spreadsheet structures based on user requirements.\n\n"
+      "DESIGN PRINCIPLES:\n"
+      "- Keep it SIMPLE: Use only essential columns\n"
+      "- Include NUMERICAL DATA: For financial/hiring/budget sheets, always include monetary values (salary, cost, price, revenue)\n"
+      "- Include FORMULAS: Add calculations (SUM, multiplication, etc.) where appropriate\n"
+      "- Avoid UNNECESSARY columns: Skip meta-columns like 'Notes', 'Phase', 'Status', 'Seniority Level' unless explicitly requested\n"
+      "- Provide REALISTIC example data with actual numbers\n\n"
+      "EXAMPLES:\n\n"
+      "❌ BAD - No monetary data:\n"
+      'Columns: ["Month", "Role", "Seniority Level", "Headcount", "Notes"]\n'
+      "Missing: Salary, Cost (no monetary values!)\n\n"
+      "✅ GOOD - Has numbers and formulas:\n"
+      'Columns: ["Month", "Role", "Headcount", "Salary", "Cost"]\n'
+      'Example row: [1, "Engineer", 1, 8000, "=C2*D2"]\n'
+      "Includes: Actual salaries + formula for calculated cost\n\n"
       "Return a JSON plan with:\n"
       "{\n"
       '  "title": "spreadsheet title",\n'
@@ -531,16 +526,17 @@ class PROMPTS:
       '          "name": "column name",\n'
       '          "type": "string | number | boolean | date | formula",\n'
       '          "validation": "optional validation rule",\n'
-      '          "formula": "optional formula template"\n'
+      '          "formula": "optional formula template like =C2*D2"\n'
       "        }\n"
       "      ],\n"
       '      "exampleRows": [\n'
-      '        ["value1", "value2", ...]\n'
+      '        ["value1", 8000, "=A1*B1", ...]  // Include actual numbers and formulas\n'
       "      ]\n"
       "    }\n"
       "  ],\n"
       '  "documentation": "optional readme content"\n'
-      "}"
+      "}\n\n"
+      "Remember: Simple structure, essential columns, include numbers and formulas."
     )
 
     @staticmethod
