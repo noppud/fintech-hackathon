@@ -458,7 +458,7 @@
 		gap: 1.75rem;
 		height: calc(100vh - 180px);
 		max-height: calc(100vh - 180px);
-		overflow: hidden;
+		position: relative;
 	}
 
 	.sheet-sidebar {
@@ -466,8 +466,10 @@
 		flex-direction: column;
 		gap: 1.25rem;
 		overflow-y: auto;
-		overflow-x: hidden;
+		overflow-x: visible;
 		padding-right: 0.5rem;
+		position: relative;
+		z-index: 1;
 	}
 
 	.sheet-sidebar::-webkit-scrollbar {
@@ -941,12 +943,13 @@
 		left: 30px;
 		top: -10px;
 		width: 380px;
+		max-width: min(380px, 80vw);
 		padding: 1.25rem;
 		background: rgba(3, 8, 7, 0.98);
 		border: 1px solid rgba(78, 240, 178, 0.4);
 		border-radius: 1rem;
 		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(78, 240, 178, 0.1);
-		z-index: 1000;
+		z-index: 10000;
 		opacity: 0;
 		visibility: hidden;
 		transform: translateX(-10px);
