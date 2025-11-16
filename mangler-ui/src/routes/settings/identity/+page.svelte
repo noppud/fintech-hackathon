@@ -215,16 +215,15 @@
         </div>
       {/if}
     </div>
+  {/if}
 
-    <div class="mt-8 p-4 bg-gray-50 rounded-lg">
-      <h3 class="font-medium text-gray-900 mb-2">How it works</h3>
-      <ol class="list-decimal list-inside space-y-1 text-sm text-gray-700">
-        <li>Link your Google account email address here</li>
-        <li>Configure your MCPs on the <a href="/mcp" class="text-blue-600 hover:underline">MCP page</a></li>
-        <li>Open any Google Sheet with the Mangler extension</li>
-        <li>Use @mentions in chat to invoke your MCPs (e.g., "@gdrive save this")</li>
-      </ol>
-    </div>
+  <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+    <h3 class="font-medium text-gray-900 mb-2">How it works</h3>
+    <ol class="list-decimal list-inside space-y-1 text-sm text-gray-700">
+      <li>Link your Google account email address here</li>
+      <li>Configure your MCPs on the <a href="/mcp" class="text-blue-600 hover:underline">MCP page</a></li>
+      <li>Open any Google Sheet with the Mangler extension</li>
+      <li>Use @mentions in chat to invoke your MCPs (e.g., "@gdrive save this")</li>
+    </ol>
   </div>
-{/if}
 </div>

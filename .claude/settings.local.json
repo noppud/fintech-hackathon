@@ -9,7 +9,8 @@
       "Bash(docker rm:*)",
       "Bash(docker rmi:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(pnpm run build:*)"
     ],
     "deny": [],
     "ask": []
