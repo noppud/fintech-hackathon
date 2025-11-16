@@ -28,7 +28,7 @@
 				<p class="dashboard__eyebrow">Operational console</p>
 				<span class="dashboard__badge">Beta workspace</span>
 			</div>
-			<h1>Unified control for Mangler Finance</h1>
+			<h1>Agents that keep your Google Sheets sharp</h1>
 			<p class="dashboard__copy">
 				Track workflows, automate onboarding, and give your team a single secure entry point backed by proactive
 				monitoring.
