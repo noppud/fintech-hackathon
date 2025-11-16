@@ -16,7 +16,7 @@ from importlib import resources
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse
+from fastapi.responses import JSONResponse, StreamingResponse, HTMLResponse, FileResponse
 from pydantic import BaseModel
 from google.oauth2.credentials import Credentials as OAuthCredentials
 import asyncio
@@ -340,6 +340,22 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy", "timestamp": _dt.datetime.utcnow().isoformat() + "Z"}
+
+
+@app.get("/mangler.png")
+async def get_logo():
+    """Serve the mangler logo PNG file."""
+    logo_path = PROJECT_ROOT / "mangler.png"
+    if not logo_path.exists():
+        raise HTTPException(status_code=404, detail="Logo file not found")
+    return FileResponse(
+        logo_path,
+        media_type="image/png",
+        filename="mangler.png",
+        headers={
+            "Cache-Control": "public, max-age=31536000",  # Cache for 1 year
+        }
+    )
 
 
 # * ============================================================================
