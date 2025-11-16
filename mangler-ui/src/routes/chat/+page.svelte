@@ -1,4 +1,5 @@
 <script lang="ts">
+	// Sheet Mangler Chat component with tooltip
 	import { onMount, onDestroy } from 'svelte';
 
 	interface Message {
@@ -303,7 +304,32 @@
 	<aside class="sheet-sidebar">
 		<div class="sheet-card sheet-card--context">
 			<p class="eyebrow">Sheet context</p>
-			<h2>Sheet Mangler</h2>
+			<div class="sheet-card__header-with-tooltip">
+				<h2>Sheet Mangler</h2>
+				<div class="tooltip-wrapper">
+					<svg class="info-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+					</svg>
+					<div class="tooltip-content">
+						<h4>Step 1: Share Your Google Sheet</h4>
+						<p>First, share your Google Sheet with our service account so we can install the extension.</p>
+						<div class="service-account-section">
+							<label>Service Account Email:</label>
+							<div class="email-copy-box">
+								<code>googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com</code>
+								<button class="copy-btn" on:click={() => {
+									navigator.clipboard.writeText('googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com');
+								}}>
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+										<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+									</svg>
+								</button>
+							</div>
+							<p class="permission-note">Copy this email and share your sheet with Editor permissions</p>
+						</div>
+					</div>
+				</div>
+			</div>
 			<p>Attach a Google Sheet and Mangler will keep anomalies, formula drifts, and privacy leaks in check.</p>
 			<label class="field">
 				<span>Google Sheets URL</span>
@@ -880,6 +906,137 @@
 	.dot--online {
 		background: #4ef0b2;
 		box-shadow: 0 0 10px rgba(78, 240, 178, 0.7);
+	}
+
+	/* Tooltip styles */
+	.sheet-card__header-with-tooltip {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.sheet-card__header-with-tooltip h2 {
+		margin: 0;
+	}
+
+	.tooltip-wrapper {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+	}
+
+	.info-icon {
+		color: rgba(184, 224, 213, 0.68);
+		cursor: help;
+		transition: color 0.2s ease;
+	}
+
+	.tooltip-wrapper:hover .info-icon {
+		color: #4ef0b2;
+	}
+
+	.tooltip-content {
+		position: absolute;
+		left: 30px;
+		top: -10px;
+		width: 380px;
+		padding: 1.25rem;
+		background: rgba(3, 8, 7, 0.98);
+		border: 1px solid rgba(78, 240, 178, 0.4);
+		border-radius: 1rem;
+		box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(78, 240, 178, 0.1);
+		z-index: 1000;
+		opacity: 0;
+		visibility: hidden;
+		transform: translateX(-10px);
+		transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
+		pointer-events: none;
+	}
+
+	.tooltip-wrapper:hover .tooltip-content {
+		opacity: 1;
+		visibility: visible;
+		transform: translateX(0);
+		pointer-events: auto;
+	}
+
+	.tooltip-content h4 {
+		margin: 0 0 0.75rem;
+		font-size: 1.1rem;
+		color: #f6fff9;
+	}
+
+	.tooltip-content p {
+		margin: 0 0 1rem;
+		color: rgba(212, 239, 229, 0.9);
+		line-height: 1.5;
+		font-size: 0.9rem;
+	}
+
+	.service-account-section {
+		background: rgba(6, 14, 12, 0.7);
+		border: 1px solid rgba(72, 110, 99, 0.5);
+		border-radius: 0.75rem;
+		padding: 1rem;
+	}
+
+	.service-account-section label {
+		display: block;
+		font-size: 0.85rem;
+		color: rgba(184, 224, 213, 0.8);
+		margin-bottom: 0.5rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+	}
+
+	.email-copy-box {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		background: rgba(3, 8, 6, 0.9);
+		border: 1px solid rgba(78, 240, 178, 0.3);
+		border-radius: 0.5rem;
+		padding: 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.email-copy-box code {
+		flex: 1;
+		font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+		font-size: 0.8rem;
+		color: #4ef0b2;
+		word-break: break-all;
+		background: transparent;
+	}
+
+	.copy-btn {
+		padding: 0.4rem;
+		background: rgba(78, 240, 178, 0.15);
+		border: 1px solid rgba(78, 240, 178, 0.4);
+		border-radius: 0.4rem;
+		color: #4ef0b2;
+		cursor: pointer;
+		transition: background 0.2s ease, transform 0.2s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.copy-btn:hover {
+		background: rgba(78, 240, 178, 0.25);
+		transform: scale(1.05);
+	}
+
+	.copy-btn:active {
+		transform: scale(0.95);
+	}
+
+	.permission-note {
+		margin: 0;
+		font-size: 0.85rem;
+		color: rgba(202, 229, 217, 0.85);
+		font-style: italic;
 	}
 
 	@media (max-width: 960px) {
