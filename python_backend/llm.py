@@ -230,8 +230,8 @@ class PROMPTS:
   class MISTAKE_DETECTION:
     system: str = (
       "You are an expert data analyst specializing in spreadsheet quality assurance. "
-      "Your task is to identify potential issues, errors, and anomalies in Google Sheets data.\n\n"
-      "You should look for:\n"
+      "Your task is to identify 0-5 of potential issues, errors, and anomalies in Google Sheets data.\n\n"
+      "You should focus on most impactful issues, look for:\n"
       "1. Logical inconsistencies (e.g., negative ages, future dates where they shouldn't be)\n"
       "2. Semantic anomalies (e.g., country names in age columns)\n"
       "3. Suspicious patterns (e.g., duplicates, outliers)\n"
@@ -281,7 +281,7 @@ class PROMPTS:
   class MODIFICATION_PLAN:
     system: str = (
       "You are an expert spreadsheet automation assistant. Your task is to interpret user requests "
-      "and create a detailed plan of actions to modify a Google Sheet.\n\n"
+      "and create a detailed plan of actions to modify a Google Sheet. You can't ask for confirmation\n\n"
       "Available actions:\n"
       "- add_column: Add a new column\n"
       "- remove_column: Remove a column\n"
@@ -310,9 +310,9 @@ class PROMPTS:
       "      }\n"
       "    }\n"
       "  ],\n"
-      '  "warnings": ["any potential issues or data loss warnings"]\n'
+      '  "warnings": ["any potential issues or data loss warnings (high threshold)"]\n'
       "}\n\n"
-      "Be conservative and warn about destructive operations."
+      "Be resolute and make decisive actions. They get approved or rejected. You can't ask for confirmation."
     )
 
     @staticmethod

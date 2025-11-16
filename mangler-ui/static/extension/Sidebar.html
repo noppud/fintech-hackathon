@@ -513,7 +513,7 @@
 
           // Create message parts
           var parts = [
-            document.createTextNode("Hi, I'm your spreadsheet copilot.\n\n"),
+            document.createTextNode("Hi, I'm your spreadSheet Mangler.\n\n"),
           ];
 
           // Spreadsheet name
@@ -656,7 +656,9 @@
 
           const action = button.dataset.action;
           const cellLocation = card.dataset.cellLocation;
-          const issueData = card.dataset.issueData ? JSON.parse(card.dataset.issueData) : null;
+          const issueData = card.dataset.issueData
+            ? JSON.parse(card.dataset.issueData)
+            : null;
           const buttons = card.querySelectorAll(".issue-btn");
           const statusEl = card.querySelector(".issue-status");
           const actionsEl = card.querySelector(".issue-actions");
@@ -664,7 +666,8 @@
           buttons.forEach(function (btn) {
             btn.disabled = true;
           });
-          statusEl.textContent = action === "fix" ? "Applying AI fix…" : "Ignoring…";
+          statusEl.textContent =
+            action === "fix" ? "Applying AI fix…" : "Ignoring…";
 
           if (action === "fix") {
             // Call AI to fix the issue
@@ -682,7 +685,8 @@
                   buttons.forEach(function (btn) {
                     btn.disabled = false;
                   });
-                  statusEl.textContent = result.message || "AI couldn't fix this issue";
+                  statusEl.textContent =
+                    result.message || "AI couldn't fix this issue";
                 }
               })
               .withFailureHandler(function (err) {
@@ -690,7 +694,8 @@
                   btn.disabled = false;
                 });
                 statusEl.textContent =
-                  "Error: " + (err && err.message ? err.message : "Failed to fix");
+                  "Error: " +
+                  (err && err.message ? err.message : "Failed to fix");
               })
               .fixIssueWithAI(issueData);
           } else if (action === "ignore") {
@@ -705,7 +710,8 @@
                   btn.disabled = false;
                 });
                 statusEl.textContent =
-                  "Error: " + (err && err.message ? err.message : "Failed to ignore");
+                  "Error: " +
+                  (err && err.message ? err.message : "Failed to ignore");
               })
               .ignoreIssue(cellLocation);
           }
@@ -734,13 +740,15 @@
                   '<button type="button" class="issue-btn issue-btn-ignore" data-action="ignore">Ignore</button>';
               } else {
                 button.disabled = false;
-                statusEl.textContent = "Undo failed: " + (result.error || "Unknown error");
+                statusEl.textContent =
+                  "Undo failed: " + (result.error || "Unknown error");
               }
             })
             .withFailureHandler(function (err) {
               button.disabled = false;
               statusEl.textContent =
-                "Undo error: " + (err && err.message ? err.message : "Unknown error");
+                "Undo error: " +
+                (err && err.message ? err.message : "Unknown error");
             })
             .undoAIFix(cellLocation);
         }
@@ -783,7 +791,8 @@
 
             // Store full issue data for AI fix
             card.dataset.issueData = JSON.stringify({
-              cell_location: issue.cell_location || issue.range?.a1Notation || "",
+              cell_location:
+                issue.cell_location || issue.range?.a1Notation || "",
               title: issue.title || issue.message || "Issue",
               description: issue.description || "",
               severity: issue.severity || "medium",

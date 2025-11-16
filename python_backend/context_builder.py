@@ -189,7 +189,7 @@ class ContextBuilder:
       "dataTypes": data_types,
     }
 
-  def _sample_data(self, data: Dict[str, Any], top_n: int = 10) -> List[Dict[str, Any]]:
+  def _sample_data(self, data: Dict[str, Any], top_n: int = 150) -> List[Dict[str, Any]]:
     rows: List[List[Dict[str, Any]]] = data.get("values") or []
     sampled_rows = rows[: min(top_n, len(rows))]
     return [

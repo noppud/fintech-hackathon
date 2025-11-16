@@ -33,7 +33,7 @@ function showCopilotSidebar() {
 
     // Create HTML output with proper settings
     var html = HtmlService.createHtmlOutputFromFile("Sidebar")
-      .setTitle("Sheet Copilot")
+      .setTitle("Sheet Mangler")
       .setWidth(400)
       .setSandboxMode(HtmlService.SandboxMode.IFRAME);
 
@@ -575,7 +575,10 @@ function fixIssueWithAI(issueData) {
       var properties = PropertiesService.getScriptProperties();
       var fixSnapshotKey =
         "fix_snapshot_" + spreadsheetId + "_" + issueData.cell_location;
-      properties.setProperty(fixSnapshotKey, updateCellsResult.snapshot_batch_id);
+      properties.setProperty(
+        fixSnapshotKey,
+        updateCellsResult.snapshot_batch_id
+      );
 
       // Now revert the color highlight
       ignoreIssue(issueData.cell_location);
