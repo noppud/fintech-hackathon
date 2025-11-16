@@ -141,7 +141,13 @@ class AgentOrchestrator:
           "enableRuleBased": config_dict.get("includeRuleBased", True),
           "enableLLMBased": config_dict.get("includeLLMBased", True),
           "minSeverity": "info",
-          "categoriesToCheck": [],
+          "categoriesToCheck": [
+            "formula_error",
+            "inconsistent_formula",
+            "type_mismatch",
+            "missing_value",
+            "duplicate_key",
+          ],
         }
 
         result = self.mistake_detector.detect_issues(spreadsheet_id, sheet_title, config)
