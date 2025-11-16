@@ -40,10 +40,14 @@
 		{#if data?.isAuthenticated}
 			<div class="app-header__user">
 				<span class="app-header__email">{data.user?.email}</span>
-				<a class="app-header__link" href="/api/auth/logout" data-sveltekit-reload>Logout</a>
+				<a class="app-header__link" href="/api/auth/logout" data-sveltekit-reload>
+					Logout
+				</a>
 			</div>
 		{:else}
-			<a class="app-header__link" href="/login">Login</a>
+			<a class="app-header__link" href="/login">
+				Login
+			</a>
 		{/if}
 	</div>
 

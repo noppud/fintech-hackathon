@@ -22,25 +22,104 @@
 </svelte:head>
 
 <section class="dashboard">
-	<div class="dashboard__hero">
-		<p class="dashboard__eyebrow">Operational Console</p>
-		<h1>Unified control for Mangler Finance</h1>
-		<p class="dashboard__copy">
-			Track workflows, automate onboarding and give your team a single secure entry point.
-		</p>
+	<div class="dashboard__grid">
+		<article class="dashboard__hero">
+			<div class="dashboard__eyebrow-row">
+				<p class="dashboard__eyebrow">Operational console</p>
+				<span class="dashboard__badge">Beta workspace</span>
+			</div>
+			<h1>Unified control for Mangler Finance</h1>
+			<p class="dashboard__copy">
+				Track workflows, automate onboarding, and give your team a single secure entry point backed by proactive
+				monitoring.
+			</p>
 
-		{#if userEmail}
-			<div class="dashboard__chip">Signed in as {userEmail}</div>
-		{/if}
+			{#if userEmail}
+				<div class="dashboard__chip">
+					<span class="dot dot--online" aria-hidden="true"></span>
+					Signed in as {userEmail}
+				</div>
+			{/if}
 
-		<div class="dashboard__actions">
-			<a class="dashboard__btn dashboard__btn--primary" href="/chat">Open Chat</a>
-			<a class="dashboard__btn dashboard__btn--secondary" href="/extension">Get Extension</a>
-			<a class="dashboard__btn dashboard__btn--ghost" href="/api/auth/logout" data-sveltekit-reload>Sign out</a>
+			<div class="dashboard__actions">
+				<a class="dashboard__btn dashboard__btn--primary" href="/chat">Open Sheet Mangler</a>
+				<a class="dashboard__btn dashboard__btn--secondary" href="/extension">Deploy extension</a>
+				<a class="dashboard__btn dashboard__btn--ghost" href="/api/auth/logout" data-sveltekit-reload>Sign out</a>
+			</div>
+
+			<ul class="dashboard__highlights">
+				{#each heroHighlights as item}
+					<li>
+						<p class="value">{item.value}</p>
+						<p class="label">{item.label}</p>
+						<span>{item.note}</span>
+					</li>
+				{/each}
+			</ul>
+		</article>
+
+		<div class="dashboard__stack">
+			<MetricsPanel
+				stats={stats}
+				className="dashboard__panel"
+				heading="Health telemetry"
+				onlineLabel="Live metrics"
+				offlineNote={telemetryStatus}
+			/>
+
+			<div class="dashboard__card dashboard__card--status">
+				<div>
+					<p class="dashboard__card-label">Workspace health</p>
+					<h3>{telemetryStatus}</h3>
+					<p>
+						Mangler surfaces outliers, sync drift, and onboarding risks in one secure pane of glass.
+					</p>
+				</div>
+				<ul>
+					<li>
+						<strong>Orchestration</strong>
+						<span>7 automations live</span>
+					</li>
+					<li>
+						<strong>Alerts</strong>
+						<span>Escalations route to finance ops</span>
+					</li>
+				</ul>
+			</div>
 		</div>
 	</div>
 
-	<MetricsPanel stats={stats} className="dashboard__panel" />
+	<div class="dashboard__lower-grid">
+		<article class="dashboard__card dashboard__card--actions">
+			<h3>Next actions</h3>
+			<p class="muted">Give your team a fast path to resolution.</p>
+			<ul>
+				<li>Audit onboarding flows before Friday close.</li>
+				<li>Connect Supabase credentials for live metrics.</li>
+				<li>Roll out the Chrome extension to new analysts.</li>
+			</ul>
+			<div class="dashboard__btn-row">
+				<a class="dashboard__btn dashboard__btn--primary" href="/chat">Review flagged sheets</a>
+				<a class="dashboard__btn dashboard__btn--ghost" href="/extension">Share extension</a>
+			</div>
+		</article>
+
+		<article class="dashboard__card dashboard__card--security">
+			<div class="dashboard__card-header">
+				<h3>Security posture</h3>
+				<span class="pill">SOC 2 ready</span>
+			</div>
+			<p>
+				Session isolation, fine-grained access controls, and audit trails keep workflows compliant while your team
+				moves quickly.
+			</p>
+			<ul>
+				<li>SSO enforced across every workspace.</li>
+				<li>Least-privilege policies for chat + automation.</li>
+				<li>Daily exports piped to your governance vault.</li>
+			</ul>
+		</article>
+	</div>
 
 	{#if missingKindeConfig}
 		<div class="dashboard__warning">
@@ -55,103 +134,283 @@
 
 <style>
 	.dashboard {
-		max-width: 1100px;
-		margin: 0 auto;
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+		display: flex;
+		flex-direction: column;
 		gap: 2rem;
 	}
 
+	.dashboard__grid {
+		display: grid;
+		grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+		gap: 1.75rem;
+	}
+
 	.dashboard__hero {
-		padding: 2.5rem;
-		border-radius: 1.5rem;
-		background: linear-gradient(135deg, rgba(15, 32, 28, 0.95), rgba(28, 50, 44, 0.85));
-		box-shadow: 0 35px 60px rgba(5, 9, 8, 0.55);
-		border: 1px solid rgba(82, 110, 100, 0.6);
+		padding: clamp(2rem, 4vw, 3.5rem);
+		border-radius: 2rem;
+		background: radial-gradient(circle at top right, rgba(53, 255, 184, 0.18), transparent 55%),
+			linear-gradient(135deg, rgba(6, 16, 12, 0.95), rgba(16, 39, 31, 0.9));
+		border: 1px solid rgba(85, 193, 151, 0.35);
+		box-shadow: 0 45px 80px rgba(3, 10, 8, 0.65);
+	}
+
+	.dashboard__eyebrow-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
 	}
 
 	.dashboard__eyebrow {
 		font-size: 0.85rem;
 		text-transform: uppercase;
+		letter-spacing: 0.35em;
+		color: rgba(183, 246, 218, 0.6);
+		margin: 0;
+	}
+
+	.dashboard__badge {
+		padding: 0.25rem 0.75rem;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		text-transform: uppercase;
 		letter-spacing: 0.2em;
-		color: rgba(181, 214, 201, 0.85);
-		margin-bottom: 0.75rem;
+		background: rgba(60, 236, 163, 0.15);
+		border: 1px solid rgba(60, 236, 163, 0.5);
+		color: #c9ffe7;
 	}
 
 	h1 {
-		font-size: clamp(2rem, 4vw, 3rem);
+		font-size: clamp(2.4rem, 4vw, 3.6rem);
 		margin: 0 0 1rem;
-		color: #f3fff9;
+		color: #f6fff9;
+		letter-spacing: -0.04em;
 	}
 
 	.dashboard__copy {
-		color: rgba(212, 238, 227, 0.85);
-		margin-bottom: 1.5rem;
+		color: rgba(221, 248, 237, 0.85);
+		margin-bottom: 1.75rem;
 		line-height: 1.7;
+		max-width: 48ch;
 	}
 
 	.dashboard__chip {
 		display: inline-flex;
-		padding: 0.5rem 0.85rem;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.45rem 0.9rem;
 		border-radius: 999px;
-		background: rgba(5, 12, 10, 0.5);
-		border: 1px solid rgba(101, 136, 123, 0.5);
+		background: rgba(4, 11, 9, 0.45);
+		border: 1px solid rgba(63, 210, 145, 0.45);
 		font-size: 0.9rem;
-		margin-bottom: 1.2rem;
-		color: #d2fff0;
+		margin-bottom: 1.25rem;
+		color: #dcfff2;
+	}
+
+	.dot {
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.4);
+	}
+
+	.dot--online {
+		background: #4ef0b2;
+		box-shadow: 0 0 10px rgba(78, 240, 178, 0.7);
 	}
 
 	.dashboard__actions {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.75rem;
+		margin-bottom: 1.5rem;
 	}
 
 	.dashboard__btn {
-		border-radius: 0.9rem;
-		padding: 0.85rem 1.2rem;
-		border: none;
+		border-radius: 999px;
+		padding: 0.85rem 1.4rem;
+		border: 1px solid transparent;
 		font-weight: 600;
 		cursor: pointer;
 		text-decoration: none;
 		text-align: center;
-		transition: transform 150ms ease, box-shadow 150ms ease;
+		transition: transform 150ms ease, box-shadow 150ms ease, border-color 0.2s ease;
 	}
 
 	.dashboard__btn--primary {
-		background: linear-gradient(135deg, #2ba36a, #3fd08b);
-		color: #04130d;
-		box-shadow: 0 15px 30px rgba(63, 208, 139, 0.35);
+		background: linear-gradient(135deg, #2de28c, #69fabc);
+		color: #02150d;
+		box-shadow: 0 20px 30px rgba(47, 226, 140, 0.3);
 	}
 
 	.dashboard__btn--secondary {
-		background: rgba(43, 163, 106, 0.15);
-		color: #a7f3d0;
-		border: 1px solid rgba(43, 163, 106, 0.4);
+		background: rgba(47, 226, 140, 0.12);
+		color: #c2ffe7;
+		border-color: rgba(47, 226, 140, 0.4);
 	}
 
 	.dashboard__btn--ghost {
-		background: rgba(5, 12, 10, 0.6);
-		color: #cdeee0;
-		border: 1px solid rgba(95, 130, 118, 0.6);
+		background: rgba(5, 12, 10, 0.55);
+		color: #d2fbe9;
+		border-color: rgba(91, 147, 129, 0.5);
 	}
 
 	.dashboard__btn:hover {
 		transform: translateY(-1px);
 	}
 
+	.dashboard__highlights {
+		margin: 2rem 0 0;
+		padding: 0;
+		list-style: none;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+		gap: 1rem;
+	}
+
+	.dashboard__highlights li {
+		padding: 1rem;
+		border-radius: 1.25rem;
+		background: rgba(4, 12, 10, 0.6);
+		border: 1px solid rgba(81, 122, 112, 0.4);
+	}
+
+	.dashboard__highlights .value {
+		margin: 0;
+		font-size: clamp(1.5rem, 3vw, 2.4rem);
+		font-weight: 600;
+		color: #f5fff9;
+	}
+
+	.dashboard__highlights .label {
+		margin: 0.25rem 0 0.15rem;
+		text-transform: uppercase;
+		letter-spacing: 0.2em;
+		font-size: 0.75rem;
+		color: rgba(162, 196, 186, 0.8);
+	}
+
+	.dashboard__highlights span {
+		font-size: 0.85rem;
+		color: rgba(198, 225, 215, 0.65);
+	}
+
+	.dashboard__stack {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.dashboard__panel {
+		width: 100%;
+	}
+
+	.dashboard__card {
+		padding: 1.75rem;
+		border-radius: 1.5rem;
+		background: rgba(4, 9, 8, 0.75);
+		border: 1px solid rgba(82, 136, 117, 0.4);
+		box-shadow: 0 25px 50px rgba(2, 5, 4, 0.65);
+	}
+
+	.dashboard__card--status ul {
+		list-style: none;
+		padding: 0;
+		margin: 1.25rem 0 0;
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.dashboard__card--status li {
+		display: flex;
+		justify-content: space-between;
+		font-size: 0.9rem;
+		color: #c5e6d8;
+	}
+
+	.dashboard__card-label {
+		margin: 0 0 0.25rem;
+		font-size: 0.8rem;
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		color: rgba(193, 234, 221, 0.6);
+	}
+
+	.dashboard__card h3 {
+		margin: 0 0 0.75rem;
+		font-size: 1.3rem;
+	}
+
+	.dashboard__card p {
+		margin: 0;
+		color: rgba(211, 240, 230, 0.8);
+		line-height: 1.6;
+	}
+
+	.dashboard__lower-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+		gap: 1.5rem;
+	}
+
+	.dashboard__card--actions ul,
+	.dashboard__card--security ul {
+		margin: 1rem 0 0;
+		padding-left: 1.1rem;
+		color: rgba(202, 229, 217, 0.85);
+		line-height: 1.5;
+	}
+
+	.dashboard__btn-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		margin-top: 1.25rem;
+	}
+
+	.dashboard__card-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.pill {
+		padding: 0.25rem 0.9rem;
+		border-radius: 999px;
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		font-size: 0.8rem;
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		color: rgba(236, 255, 248, 0.85);
+	}
+
+	.muted {
+		color: rgba(202, 229, 217, 0.7);
+		margin: 0.25rem 0 0;
+	}
+
 	.dashboard__warning {
-		grid-column: 1 / -1;
 		padding: 1.5rem;
-		border-radius: 1rem;
-		background: rgba(191, 97, 71, 0.12);
-		border: 1px solid rgba(191, 97, 71, 0.3);
-		color: #f9c5b5;
+		border-radius: 1.25rem;
+		background: rgba(255, 142, 102, 0.15);
+		border: 1px solid rgba(255, 142, 102, 0.4);
+		color: #ffe1d3;
 	}
 
 	.dashboard__warning code {
 		font-family: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
 		color: #ffd7cb;
 		font-size: 0.9rem;
+	}
+
+	@media (max-width: 900px) {
+		.dashboard__grid {
+			grid-template-columns: 1fr;
+		}
+
+		.dashboard__actions {
+			flex-direction: column;
+		}
 	}
 </style>

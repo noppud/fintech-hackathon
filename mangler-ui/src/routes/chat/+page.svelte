@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { browser } from '$app/environment';
 
 	interface Message {
 		id: string;
@@ -258,171 +257,299 @@
 	<title>Sheet Mangler Chat</title>
 </svelte:head>
 
-<div class="chat-container">
-	<!-- Header -->
-	<div class="chat-header">
-		<h1>Sheet Mangler</h1>
-		<div class="sheet-input">
-			<input
-				type="text"
-				placeholder="Enter Google Sheets URL (optional)"
-				bind:value={spreadsheetUrl}
-				class="url-input"
-			/>
-			<input
-				type="text"
-				placeholder="Sheet name"
-				bind:value={sheetTitle}
-				class="sheet-input-field"
-			/>
+<div class="sheet-layout">
+	<aside class="sheet-sidebar">
+		<div class="sheet-card sheet-card--context">
+			<p class="eyebrow">Sheet context</p>
+			<h2>Sheet Mangler</h2>
+			<p>Attach a Google Sheet and Mangler will keep anomalies, formula drifts, and privacy leaks in check.</p>
+			<label class="field">
+				<span>Google Sheets URL</span>
+				<input
+					type="text"
+					placeholder="Enter URL (optional)"
+					bind:value={spreadsheetUrl}
+					class="text-input"
+				/>
+			</label>
+			<label class="field">
+				<span>Sheet name</span>
+				<input
+					type="text"
+					placeholder="Sheet1"
+					bind:value={sheetTitle}
+					class="text-input"
+				/>
+			</label>
 		</div>
-	</div>
 
-	<!-- Chat window -->
-	<div class="chat-window" bind:this={chatWindow}>
-		{#each messages as message}
-			<div class="chat-row chat-row--{message.role}">
-				<div class="chat-bubble chat-bubble--{message.role}">
-					{#if message.role === 'assistant' && isTyping && message === messages[messages.length - 1] && !message.content}
-						<div class="typing-dots">
-							<span></span>
-							<span></span>
-							<span></span>
-						</div>
-					{:else}
-						{message.content || ''}
-					{/if}
-				</div>
+		<div class="sheet-card sheet-card--tips">
+			<p class="eyebrow">Rapid playbook</p>
+			<ul class="sheet-checklist">
+				<li>Drop a Sheets link so Mangler can stream structure + metadata.</li>
+				<li>Ask about anomalies, reconciliations, or formula guardrails.</li>
+				<li>Let the assistant patch the sheet via update_cells when ready.</li>
+			</ul>
+		</div>
+
+		<div class="sheet-card sheet-card--issues">
+			<div class="sheet-card__header">
+				<h3>Detected issues</h3>
+				<span class="pill">{issues.length} open</span>
 			</div>
-		{/each}
-
-		<!-- Issues -->
-		{#if issues.length > 0}
-			<div class="issues-section">
-				<h3>Detected Issues</h3>
-				{#each issues as issue}
-					<div class="issue-card issue-severity-{issue.severity}" style="border-left-color: {issue.color}">
-						<div class="issue-header">
-							<span class="issue-location">{issue.cell_location}</span>
-							<span class="issue-severity">{issue.severity}</span>
-						</div>
-						<div class="issue-title">{issue.title}</div>
-						{#if issue.description}
-							<div class="issue-description">{issue.description}</div>
-						{/if}
-						{#if issue.suggestedFix}
-							<div class="issue-suggested-fix">
-								<strong>Suggested fix:</strong> {issue.suggestedFix}
+			{#if issues.length > 0}
+				<ul class="issues-list">
+					{#each issues as issue}
+						<li class="issue-card issue-severity-{issue.severity}" style="border-left-color: {issue.color}">
+							<div class="issue-header">
+								<span class="issue-location">{issue.cell_location}</span>
+								<span class={`issue-chip issue-chip--${issue.severity}`}>
+									{issue.severity}
+								</span>
 							</div>
-						{/if}
-						<div class="issue-actions">
-							<button
-								class="issue-btn issue-btn-fix"
-								on:click={() => fixIssue(issue)}
-								disabled={isLoading}
-							>
-								Fix with AI
-							</button>
-							<button
-								class="issue-btn issue-btn-ignore"
-								on:click={() => ignoreIssue(issue)}
-							>
-								Ignore
-							</button>
-						</div>
-					</div>
-				{/each}
-			</div>
-		{/if}
-	</div>
+							<div class="issue-title">{issue.title}</div>
+							{#if issue.description}
+								<div class="issue-description">{issue.description}</div>
+							{/if}
+							{#if issue.suggestedFix}
+								<div class="issue-suggested-fix">
+									<strong>Suggested fix:</strong> {issue.suggestedFix}
+								</div>
+							{/if}
+							<div class="issue-actions">
+								<button class="issue-btn issue-btn-fix" on:click={() => fixIssue(issue)} disabled={isLoading}>
+									Fix with AI
+								</button>
+								<button class="issue-btn issue-btn-ignore" on:click={() => ignoreIssue(issue)}>
+									Dismiss
+								</button>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="empty-state">No issues yet—ask Mangler to audit your data and they'll appear here.</p>
+			{/if}
+		</div>
+	</aside>
 
-	<!-- Input area -->
-	<div class="input-area">
-		<textarea
-			bind:this={textarea}
-			bind:value={inputText}
-			on:keydown={handleKeydown}
-			on:input={() => autoResize(textarea)}
-			placeholder="Ask about this sheet, formulas, or issues..."
-			disabled={isLoading}
-			rows="1"
-		/>
-		<button
-			on:click={sendMessage}
-			disabled={!inputText.trim() || isLoading}
-			class="send-btn"
-		>
-			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-				<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2 .01 7z"/>
-			</svg>
-		</button>
-	</div>
+	<section class="sheet-chat">
+		<header class="sheet-chat__header">
+			<div>
+				<p class="eyebrow">Worksheet assistant</p>
+				<h1>Ask Mangler anything</h1>
+				<p class="muted">Diagnose formulas, reconcile ledgers, or let Mangler write fix-ready instructions.</p>
+			</div>
+			<div class="sheet-status">
+				<span class="dot dot--online" aria-hidden="true"></span>
+				Live assistance
+			</div>
+		</header>
+
+		<div class="sheet-chat__window" bind:this={chatWindow}>
+			{#each messages as message}
+				<div class="chat-row chat-row--{message.role}">
+					<div class="chat-bubble chat-bubble--{message.role}">
+						{#if message.role === 'assistant' && isTyping && message === messages[messages.length - 1] && !message.content}
+							<div class="typing-dots">
+								<span></span>
+								<span></span>
+								<span></span>
+							</div>
+						{:else}
+							{message.content || ''}
+						{/if}
+					</div>
+				</div>
+			{/each}
+		</div>
+
+		<div class="sheet-composer">
+			<textarea
+				bind:this={textarea}
+				bind:value={inputText}
+				on:keydown={handleKeydown}
+				on:input={() => autoResize(textarea)}
+				placeholder="Ask about this sheet, formulas, or issues..."
+				disabled={isLoading}
+				rows="1"
+			/>
+			<button on:click={sendMessage} disabled={!inputText.trim() || isLoading} class="send-btn">
+				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+					<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2 .01 7z"/>
+				</svg>
+			</button>
+		</div>
+	</section>
 </div>
 
 <style>
-	.chat-container {
+	.sheet-layout {
+		display: grid;
+		grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+		gap: 1.75rem;
+		min-height: calc(100vh - 180px);
+	}
+
+	.sheet-sidebar,
+	.sheet-chat {
 		display: flex;
 		flex-direction: column;
-		height: 100vh;
-		background: #0a0f0d;
-		color: #e0f2e9;
+		gap: 1.25rem;
 	}
 
-	.chat-header {
-		padding: 1.5rem;
-		background: linear-gradient(135deg, rgba(15, 32, 28, 0.95), rgba(28, 50, 44, 0.85));
-		border-bottom: 1px solid rgba(82, 110, 100, 0.4);
+	.sheet-card {
+		padding: 1.6rem;
+		border-radius: 1.4rem;
+		background: rgba(5, 11, 9, 0.82);
+		border: 1px solid rgba(80, 134, 115, 0.4);
+		box-shadow: 0 18px 35px rgba(0, 0, 0, 0.55);
 	}
 
-	.chat-header h1 {
-		margin: 0 0 1rem 0;
-		font-size: 1.5rem;
-		color: #f3fff9;
+	.sheet-card--context {
+		background: radial-gradient(circle at top right, rgba(60, 236, 163, 0.16), transparent 55%),
+			linear-gradient(135deg, rgba(5, 12, 10, 0.95), rgba(8, 18, 15, 0.9));
 	}
 
-	.sheet-input {
+	.sheet-card--tips {
+		background: rgba(6, 12, 10, 0.7);
+	}
+
+	.sheet-card--issues {
+		flex: 1;
 		display: flex;
-		gap: 0.5rem;
+		flex-direction: column;
 	}
 
-	.url-input {
-		flex: 1;
+	.sheet-card__header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
 	}
 
-	.sheet-input-field {
-		width: 150px;
+	.eyebrow {
+		text-transform: uppercase;
+		letter-spacing: 0.28em;
+		font-size: 0.75rem;
+		color: rgba(184, 224, 213, 0.68);
+		margin: 0 0 0.35rem;
 	}
 
-	.url-input, .sheet-input-field {
-		padding: 0.5rem;
-		background: rgba(5, 12, 10, 0.6);
-		border: 1px solid rgba(82, 110, 100, 0.6);
-		border-radius: 0.5rem;
-		color: #e0f2e9;
+	.sheet-card h2 {
+		margin: 0 0 0.5rem;
+		font-size: 1.6rem;
+	}
+
+	.sheet-card p {
+		margin: 0;
+		color: rgba(212, 239, 229, 0.85);
+		line-height: 1.6;
+	}
+
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		margin-top: 1rem;
 		font-size: 0.9rem;
+		color: rgba(211, 239, 229, 0.9);
 	}
 
-	.url-input::placeholder, .sheet-input-field::placeholder {
-		color: rgba(181, 214, 201, 0.5);
+	.text-input {
+		padding: 0.65rem 0.75rem;
+		border-radius: 0.8rem;
+		border: 1px solid rgba(102, 146, 133, 0.5);
+		background: rgba(3, 8, 6, 0.7);
+		color: #effff8;
+		font-size: 0.95rem;
+		transition: border-color 0.2s ease, box-shadow 0.2s ease;
 	}
 
-	.chat-window {
+	.text-input:focus {
+		outline: none;
+		border-color: #52f1b3;
+		box-shadow: 0 0 0 2px rgba(82, 241, 179, 0.15);
+	}
+
+	.sheet-checklist {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.7rem;
+	}
+
+	.sheet-checklist li {
+		position: relative;
+		padding-left: 1.5rem;
+		font-size: 0.9rem;
+		color: rgba(204, 230, 220, 0.85);
+	}
+
+	.sheet-checklist li::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 0.35rem;
+		width: 0.65rem;
+		height: 0.65rem;
+		border-radius: 50%;
+		background: linear-gradient(135deg, #29dd8f, #65ffd3);
+		box-shadow: 0 0 10px rgba(101, 255, 211, 0.6);
+	}
+
+	.sheet-chat {
+		padding: 1.8rem;
+		border-radius: 1.6rem;
+		background: rgba(5, 10, 9, 0.85);
+		border: 1px solid rgba(84, 141, 122, 0.4);
+		box-shadow: 0 35px 55px rgba(0, 0, 0, 0.55);
+	}
+
+	.sheet-chat__header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 1.5rem;
+		padding-bottom: 1.25rem;
+		border-bottom: 1px solid rgba(72, 110, 99, 0.35);
+	}
+
+	.sheet-chat__header h1 {
+		margin: 0.35rem 0 0.4rem;
+		font-size: 2rem;
+	}
+
+	.sheet-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.35rem 0.9rem;
+		border-radius: 999px;
+		background: rgba(48, 191, 133, 0.15);
+		border: 1px solid rgba(48, 191, 133, 0.45);
+		font-size: 0.85rem;
+		color: #c8ffe8;
+	}
+
+	.sheet-chat__window {
 		flex: 1;
+		margin: 1.5rem 0;
+		padding: 1.25rem;
+		border-radius: 1.25rem;
+		background: rgba(3, 8, 6, 0.75);
+		border: 1px solid rgba(60, 90, 81, 0.45);
 		overflow-y: auto;
-		padding: 1.5rem;
-		background: #0a0f0d;
 	}
 
-	.chat-window::-webkit-scrollbar {
+	.sheet-chat__window::-webkit-scrollbar {
 		width: 6px;
 	}
 
-	.chat-window::-webkit-scrollbar-track {
-		background: transparent;
-	}
-
-	.chat-window::-webkit-scrollbar-thumb {
-		background: rgba(82, 110, 100, 0.6);
+	.sheet-chat__window::-webkit-scrollbar-thumb {
+		background: rgba(84, 141, 122, 0.6);
 		border-radius: 3px;
 	}
 
@@ -441,32 +568,31 @@
 
 	.chat-bubble {
 		max-width: 70%;
-		padding: 0.75rem 1rem;
-		border-radius: 1rem;
+		padding: 0.9rem 1.1rem;
+		border-radius: 1.1rem;
 		white-space: pre-wrap;
-		word-wrap: break-word;
-		line-height: 1.5;
+		line-height: 1.6;
+		font-size: 0.95rem;
 	}
 
 	.chat-bubble--user {
-		background: linear-gradient(135deg, #2ba36a, #3fd08b);
-		color: #04130d;
-		border-bottom-right-radius: 0.25rem;
+		background: linear-gradient(135deg, #30e294, #66ffd0);
+		color: #032015;
+		box-shadow: 0 12px 25px rgba(48, 226, 148, 0.3);
+		border-bottom-right-radius: 0.35rem;
 	}
 
 	.chat-bubble--assistant {
-		background: rgba(28, 50, 44, 0.6);
-		color: #e0f2e9;
-		border: 1px solid rgba(82, 110, 100, 0.3);
-		border-bottom-left-radius: 0.25rem;
+		background: rgba(20, 35, 30, 0.85);
+		border: 1px solid rgba(67, 103, 92, 0.55);
+		color: #e0f6ec;
+		border-bottom-left-radius: 0.35rem;
 	}
 
-	/* Typing indicator */
 	.typing-dots {
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		padding: 4px 0;
 	}
 
 	.typing-dots span {
@@ -477,122 +603,75 @@
 		animation: typing-jump 1.2s infinite ease-in-out;
 	}
 
-	.typing-dots span:nth-child(1) {
-		animation-delay: 0s;
-	}
-
-	.typing-dots span:nth-child(2) {
-		animation-delay: 0.2s;
-	}
-
-	.typing-dots span:nth-child(3) {
-		animation-delay: 0.4s;
-	}
+	.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+	.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 
 	@keyframes typing-jump {
-		0%, 80%, 100% {
-			transform: translateY(0);
-			opacity: 0.4;
-		}
-		40% {
-			transform: translateY(-4px);
-			opacity: 1;
-		}
+		0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+		40% { transform: translateY(-4px); opacity: 1; }
 	}
 
-	/* Issues section */
-	.issues-section {
-		margin: 2rem 0;
-		padding: 1.5rem;
-		background: rgba(28, 50, 44, 0.3);
-		border-radius: 1rem;
-		border: 1px solid rgba(82, 110, 100, 0.4);
+	.issues-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		flex: 1;
+		overflow-y: auto;
 	}
 
-	.issues-section h3 {
-		margin: 0 0 1rem 0;
-		color: #f3fff9;
-		font-size: 1.1rem;
+	.issues-list::-webkit-scrollbar {
+		width: 4px;
 	}
 
 	.issue-card {
-		background: rgba(5, 12, 10, 0.8);
-		border-radius: 0.75rem;
 		padding: 1rem;
-		margin-bottom: 1rem;
-		border-left: 3px solid;
-		transition: all 0.2s ease;
+		border-radius: 1rem;
+		background: rgba(4, 9, 7, 0.85);
+		border: 1px solid rgba(69, 109, 96, 0.45);
+		border-left: 4px solid;
+		transition: transform 0.2s ease, background 0.2s ease;
 	}
 
 	.issue-card:hover {
-		background: rgba(5, 12, 10, 1);
+		transform: translateX(4px);
+		background: rgba(4, 9, 7, 0.95);
 	}
 
 	.issue-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 0.5rem;
+		font-size: 0.85rem;
+		margin-bottom: 0.4rem;
 	}
 
 	.issue-location {
-		background: rgba(82, 110, 100, 0.3);
-		padding: 0.25rem 0.5rem;
-		border-radius: 0.25rem;
-		font-size: 0.85rem;
-		font-family: monospace;
-	}
-
-	.issue-severity {
-		padding: 0.25rem 0.5rem;
-		border-radius: 0.25rem;
-		font-size: 0.75rem;
 		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-	}
-
-	.issue-severity-critical {
-		background: rgba(220, 38, 38, 0.2);
-		color: #fca5a5;
-	}
-
-	.issue-severity-high {
-		background: rgba(251, 146, 60, 0.2);
-		color: #fdba74;
-	}
-
-	.issue-severity-medium {
-		background: rgba(250, 204, 21, 0.2);
-		color: #fde047;
-	}
-
-	.issue-severity-low {
-		background: rgba(59, 130, 246, 0.2);
-		color: #93bbfc;
 	}
 
 	.issue-title {
-		font-weight: 500;
-		margin-bottom: 0.5rem;
-		color: #f3fff9;
+		font-size: 1rem;
+		font-weight: 600;
+		margin-bottom: 0.35rem;
 	}
 
 	.issue-description {
 		font-size: 0.9rem;
-		color: rgba(181, 214, 201, 0.85);
+		color: rgba(201, 230, 219, 0.9);
 		margin-bottom: 0.75rem;
 		line-height: 1.5;
 	}
 
 	.issue-suggested-fix {
-		background: rgba(43, 163, 106, 0.1);
-		border-left: 2px solid #2ba36a;
+		background: rgba(47, 226, 140, 0.1);
+		border-left: 2px solid rgba(47, 226, 140, 0.6);
 		padding: 0.5rem;
-		border-radius: 0.25rem;
+		border-radius: 0.5rem;
 		font-size: 0.85rem;
-		margin-bottom: 1rem;
-		color: #a7f3d0;
+		margin-bottom: 0.75rem;
 	}
 
 	.issue-actions {
@@ -602,33 +681,25 @@
 
 	.issue-btn {
 		flex: 1;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
+		padding: 0.55rem 1rem;
+		border-radius: 0.75rem;
 		border: none;
 		font-size: 0.85rem;
 		font-weight: 600;
 		cursor: pointer;
-		transition: all 0.2s ease;
+		transition: transform 0.2s ease, box-shadow 0.2s ease;
 	}
 
 	.issue-btn-fix {
-		background: linear-gradient(135deg, #2ba36a, #3fd08b);
-		color: #04130d;
-	}
-
-	.issue-btn-fix:hover:not(:disabled) {
-		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(63, 208, 139, 0.3);
+		background: linear-gradient(135deg, #30e294, #66ffd0);
+		color: #032015;
+		box-shadow: 0 8px 18px rgba(48, 226, 148, 0.25);
 	}
 
 	.issue-btn-ignore {
-		background: rgba(82, 110, 100, 0.3);
-		color: #b5d6c9;
-		border: 1px solid rgba(82, 110, 100, 0.6);
-	}
-
-	.issue-btn-ignore:hover {
-		background: rgba(82, 110, 100, 0.5);
+		background: rgba(80, 128, 112, 0.3);
+		color: #cfe7de;
+		border: 1px solid rgba(80, 128, 112, 0.6);
 	}
 
 	.issue-btn:disabled {
@@ -636,73 +707,115 @@
 		cursor: not-allowed;
 	}
 
-	/* Input area */
-	.input-area {
-		display: flex;
-		gap: 0.75rem;
-		padding: 1.5rem;
-		background: linear-gradient(135deg, rgba(15, 32, 28, 0.95), rgba(28, 50, 44, 0.85));
-		border-top: 1px solid rgba(82, 110, 100, 0.4);
+	.issue-chip {
+		padding: 0.15rem 0.65rem;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		text-transform: capitalize;
+		letter-spacing: 0.1em;
 	}
 
-	textarea {
+	.issue-chip--critical { background: rgba(255, 71, 84, 0.2); color: #ffbdc3; }
+	.issue-chip--high { background: rgba(255, 153, 0, 0.2); color: #ffd9a3; }
+	.issue-chip--medium { background: rgba(255, 255, 0, 0.15); color: #fff7bf; }
+	.issue-chip--low { background: rgba(64, 232, 173, 0.15); color: #d4ffef; }
+
+	.empty-state {
+		margin: 1rem 0 0;
+		color: rgba(202, 229, 217, 0.75);
+	}
+
+	.sheet-composer {
+		display: flex;
+		gap: 0.85rem;
+		align-items: flex-end;
+		padding-top: 1rem;
+		border-top: 1px solid rgba(72, 110, 99, 0.35);
+	}
+
+	.sheet-composer textarea {
 		flex: 1;
-		padding: 0.75rem;
-		background: rgba(5, 12, 10, 0.8);
-		border: 1px solid rgba(82, 110, 100, 0.6);
-		border-radius: 0.75rem;
-		color: #e0f2e9;
-		font-size: 0.95rem;
+		padding: 0.85rem 1rem;
+		border-radius: 1rem;
+		border: 1px solid rgba(78, 124, 111, 0.6);
+		background: rgba(3, 8, 6, 0.85);
+		color: #f1fff7;
+		font-size: 1rem;
 		font-family: inherit;
 		resize: none;
-		max-height: 150px;
-		line-height: 1.5;
-		transition: all 0.2s ease;
+		max-height: 160px;
+		transition: border-color 0.2s ease, box-shadow 0.2s ease;
 	}
 
-	textarea::placeholder {
-		color: rgba(181, 214, 201, 0.5);
-	}
-
-	textarea:focus {
+	.sheet-composer textarea:focus {
 		outline: none;
-		border-color: #2ba36a;
-		background: rgba(5, 12, 10, 1);
-		box-shadow: 0 0 0 2px rgba(43, 163, 106, 0.1);
-	}
-
-	textarea:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
+		border-color: #4ef0b2;
+		box-shadow: 0 0 0 2px rgba(78, 240, 178, 0.2);
 	}
 
 	.send-btn {
-		width: 42px;
-		height: 42px;
-		border-radius: 0.75rem;
+		width: 48px;
+		height: 48px;
+		border-radius: 1.1rem;
 		border: none;
-		background: transparent;
-		color: #6b9984;
+		background: linear-gradient(135deg, #30e294, #66ffd0);
+		color: #032015;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		transition: all 0.2s ease;
-		flex-shrink: 0;
-		align-self: flex-end;
-	}
-
-	.send-btn:not(:disabled):hover {
-		background: rgba(43, 163, 106, 0.1);
-		color: #2ba36a;
-	}
-
-	.send-btn:not(:disabled) {
-		color: #2ba36a;
+		box-shadow: 0 12px 24px rgba(48, 226, 148, 0.35);
+		transition: transform 0.2s ease, box-shadow 0.2s ease;
 	}
 
 	.send-btn:disabled {
-		color: rgba(107, 153, 132, 0.4);
+		opacity: 0.5;
 		cursor: not-allowed;
+		box-shadow: none;
+	}
+
+	.send-btn:not(:disabled):hover {
+		transform: translateY(-1px);
+	}
+
+	.pill {
+		padding: 0.25rem 0.9rem;
+		border-radius: 999px;
+		border: 1px solid rgba(215, 255, 237, 0.3);
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.2em;
+		color: rgba(215, 255, 237, 0.85);
+	}
+
+	.muted {
+		margin: 0;
+		color: rgba(205, 229, 219, 0.72);
+	}
+
+	.dot {
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 50%;
+	}
+
+	.dot--online {
+		background: #4ef0b2;
+		box-shadow: 0 0 10px rgba(78, 240, 178, 0.7);
+	}
+
+	@media (max-width: 960px) {
+		.sheet-layout {
+			grid-template-columns: 1fr;
+		}
+
+		.sheet-chat {
+			order: -1;
+		}
+
+		.sheet-chat__header {
+			flex-direction: column;
+			align-items: flex-start;
+		}
 	}
 </style>
