@@ -198,10 +198,133 @@ class SheetModifier:
     action: Dict[str, Any],
   ) -> None:
     params = action.get("params") or {}
+
+    # Check if using the new multi-column format
+    if params.get("applyToAllColumns") and params.get("rangeStart") and params.get("rangeEnd"):
+      self._execute_update_formula_multi_column(spreadsheet_id, sheet_title, params)
+      return
+
+    # Legacy single-cell formula update
     local_range = params.get("range") or ""
     formula = params.get("formula") or ""
+
+    if not local_range:
+      raise ValueError("update_formula requires params.range")
+    if not formula:
+      raise ValueError("update_formula requires params.formula")
+
     full_range = f"{sheet_title}!{local_range}"
     self.sheets_client.write_range(spreadsheet_id, full_range, [[formula]], value_input_option="USER_ENTERED")
+
+  def _execute_update_formula_multi_column(
+    self,
+    spreadsheet_id: str,
+    sheet_title: str,
+    params: Dict[str, Any],
+  ) -> None:
+    """
+    Execute update_formula when applyToAllColumns is true.
+    Generates formulas for each column in the range based on the formula pattern.
+
+    Params:
+      - rangeStart: Starting cell (e.g., "B3")
+      - rangeEnd: Ending cell (e.g., "Z3")
+      - formulaPattern: Pattern formula (e.g., "=B2/52")
+      - referenceRow: Row to reference in formulas (optional)
+    """
+    range_start = params.get("rangeStart", "")
+    range_end = params.get("rangeEnd", "")
+    formula_pattern = params.get("formulaPattern", "")
+
+    if not range_start or not range_end:
+      raise ValueError("update_formula with applyToAllColumns requires rangeStart and rangeEnd")
+    if not formula_pattern:
+      raise ValueError("update_formula with applyToAllColumns requires formulaPattern")
+
+    # Parse start and end cells to extract row and column info
+    import re
+    start_match = re.match(r"([A-Z]+)(\d+)", range_start)
+    end_match = re.match(r"([A-Z]+)(\d+)", range_end)
+
+    if not start_match or not end_match:
+      raise ValueError(f"Invalid range format: {range_start}:{range_end}")
+
+    start_col_letter = start_match.group(1)
+    start_row = int(start_match.group(2))
+    end_col_letter = end_match.group(1)
+    end_row = int(end_match.group(2))
+
+    if start_row != end_row:
+      raise ValueError(f"Multi-column formula update must be on same row, got {start_row} to {end_row}")
+
+    target_row = start_row
+
+    # Convert column letters to numbers
+    start_col_num = self._letter_to_column(start_col_letter)
+    end_col_num = self._letter_to_column(end_col_letter)
+
+    # Generate formulas for each column
+    formulas = []
+    for col_num in range(start_col_num, end_col_num + 1):
+      col_letter = column_to_letter(col_num)
+
+      # Replace column references in the formula pattern
+      # For pattern "=B2/52", when col is C, it becomes "=C2/52"
+      formula = self._adapt_formula_for_column(formula_pattern, col_letter, target_row, params)
+      formulas.append(formula)
+
+    # Write all formulas at once in a single row
+    full_range = f"{sheet_title}!{range_start}:{range_end}"
+    values = [formulas]  # Single row with multiple formulas
+
+    self.sheets_client.write_range(
+      spreadsheet_id,
+      full_range,
+      values,
+      value_input_option="USER_ENTERED"
+    )
+
+  @staticmethod
+  def _letter_to_column(letter: str) -> int:
+    """Convert column letter to column number (A=1, B=2, ..., Z=26, AA=27, etc.)"""
+    result = 0
+    for char in letter:
+      result = result * 26 + (ord(char) - ord('A') + 1)
+    return result
+
+  @staticmethod
+  def _adapt_formula_for_column(
+    formula_pattern: str,
+    target_col_letter: str,
+    target_row: int,
+    params: Dict[str, Any],
+  ) -> str:
+    """
+    Adapt a formula pattern for a specific column.
+
+    For example, if pattern is "=B2/52" and target_col is "C",
+    returns "=C2/52"
+    """
+    reference_row = params.get("referenceRow")
+
+    # Replace column references in the formula
+    # Pattern: =B2/52 -> =C2/52 for column C
+    import re
+
+    # Find all cell references like B2, C5, etc.
+    def replace_column(match):
+      col = match.group(1)
+      row = match.group(2)
+
+      # If this references the reference row, update the column
+      if reference_row and int(row) == reference_row:
+        return f"{target_col_letter}{row}"
+      return match.group(0)
+
+    # Match cell references (one or more letters followed by digits)
+    adapted = re.sub(r'([A-Z]+)(\d+)', replace_column, formula_pattern)
+
+    return adapted
 
   def _execute_set_value(
     self,
