@@ -14,9 +14,8 @@ const resolveLogoutRedirect = () => {
 export const GET: RequestHandler = async (event) => {
 	const redirectTarget = resolveLogoutRedirect() || '/';
 
-	const url = await kindeAuthClient.logout(
-		event.request as Parameters<typeof kindeAuthClient.logout>[0]
-	);
+	const sessionManager = event.request as unknown as Parameters<typeof kindeAuthClient.logout>[0];
+	const url = await kindeAuthClient.logout(sessionManager);
 
 	url.searchParams.set('post_logout_redirect_uri', redirectTarget);
 	url.searchParams.set('logout_redirect_url', redirectTarget);

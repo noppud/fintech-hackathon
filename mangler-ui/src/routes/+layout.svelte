@@ -79,7 +79,7 @@
 	<footer class="app-footer">
 		<div class="app-footer__content">
 			<div class="app-footer__info">
-				<p class="app-footer__copyright">© 2024 Mangler Finance</p>
+				<p class="app-footer__copyright">© 2025 Mangler Finance</p>
 				<p class="app-footer__tagline">Intelligent spreadsheet guardian</p>
 			</div>
 			<div class="app-footer__links">
@@ -356,10 +356,13 @@
 
 		.app-header__nav {
 			justify-content: center;
+			flex-wrap: wrap;
+			width: 100%;
 		}
 
 		.app-header__actions {
 			justify-content: center;
+			width: 100%;
 		}
 
 		.app-header__user {
@@ -377,6 +380,18 @@
 
 		.app-footer__links {
 			order: 1;
+		}
+	}
+
+	@media (max-width: 600px) {
+		.app-header__nav-link {
+			flex: 1 1 calc(50% - 0.35rem);
+			text-align: center;
+		}
+
+		.app-header__actions .app-header__link {
+			width: 100%;
+			text-align: center;
 		}
 	}
 </style>

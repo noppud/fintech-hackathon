@@ -31,7 +31,7 @@
 	let issues: Issue[] = [];
 	let streamController: AbortController | null = null;
 	let tooltipVisible = false;
-	let tooltipTrigger: HTMLDivElement;
+let tooltipTrigger: HTMLDivElement;
 	let tooltipTop = 0;
 	let tooltipLeft = 0;
 
@@ -347,41 +347,54 @@
 	<aside class="sheet-sidebar">
 		<div class="sheet-card sheet-card--context">
 			<p class="eyebrow">Sheet context</p>
-			<div class="sheet-card__header-with-tooltip">
-				<h2>Sheet Mangler</h2>
-				<div
-					class="tooltip-wrapper"
-					bind:this={tooltipTrigger}
+		<div class="sheet-card__header-with-tooltip">
+			<h2>Sheet Mangler</h2>
+			<div class="tooltip-wrapper" bind:this={tooltipTrigger}>
+				<button
+					type="button"
+					class="tooltip-button"
 					on:click={toggleTooltip}
+					aria-label="How to share your Google Sheet with Mangler"
+					aria-expanded={tooltipVisible}
+					aria-controls={tooltipVisible ? 'sheet-share-tooltip' : undefined}
 				>
 					<svg class="info-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
 						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
 					</svg>
-					{#if tooltipVisible}
-						<div
-							class="tooltip-content"
-							style={`top: ${tooltipTop}px; left: ${tooltipLeft}px;`}
-						>
-							<h4>Step 1: Share Your Google Sheet</h4>
-							<p>First, share your Google Sheet with our service account so we can install the extension.</p>
-							<div class="service-account-section">
-								<label>Service Account Email:</label>
-								<div class="email-copy-box">
-									<code>googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com</code>
-									<button class="copy-btn" on:click={() => {
+				</button>
+				{#if tooltipVisible}
+					<div
+						class="tooltip-content"
+						id="sheet-share-tooltip"
+						role="dialog"
+						aria-modal="false"
+						style={`top: ${tooltipTop}px; left: ${tooltipLeft}px;`}
+					>
+						<h4>Step 1: Share Your Google Sheet</h4>
+						<p>First, share your Google Sheet with our service account so we can install the extension.</p>
+						<div class="service-account-section">
+							<p class="service-account-section__label">Service Account Email:</p>
+							<div class="email-copy-box">
+								<code>googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com</code>
+								<button
+									type="button"
+									class="copy-btn"
+									aria-label="Copy service account email"
+									on:click={() => {
 										navigator.clipboard.writeText('googlesheetworker@fintech-hackathon-476313.iam.gserviceaccount.com');
-									}}>
-										<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-											<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-										</svg>
-									</button>
-								</div>
-								<p class="permission-note">Copy this email and share your sheet with Editor permissions</p>
+									}}
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+										<path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+									</svg>
+								</button>
 							</div>
+							<p class="permission-note">Copy this email and share your sheet with Editor permissions</p>
 						</div>
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
+		</div>
 			<p>Attach a Google Sheet and Mangler will keep anomalies, formula drifts, and privacy leaks in check.</p>
 			<label class="field">
 				<span>Google Sheets URL</span>
@@ -493,8 +506,14 @@
 				placeholder="Ask about this sheet, formulas, or issues..."
 				disabled={isLoading}
 				rows="1"
-			/>
-			<button on:click={sendMessage} disabled={!inputText.trim() || isLoading} class="send-btn">
+			></textarea>
+			<button
+				type="button"
+				on:click={sendMessage}
+				disabled={!inputText.trim() || isLoading}
+				class="send-btn"
+				aria-label="Send message"
+			>
 				<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
 					<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2 .01 7z"/>
 				</svg>
@@ -984,13 +1003,28 @@
 		align-items: center;
 	}
 
+	.tooltip-button {
+		background: none;
+		border: none;
+		padding: 0;
+		display: inline-flex;
+		align-items: center;
+		cursor: pointer;
+		color: inherit;
+	}
+
+	.tooltip-button:focus-visible {
+		outline: 2px solid rgba(78, 240, 178, 0.5);
+		border-radius: 999px;
+	}
+
 	.info-icon {
 		color: rgba(184, 224, 213, 0.68);
-		cursor: help;
 		transition: color 0.2s ease;
 	}
 
-	.tooltip-wrapper:hover .info-icon {
+	.tooltip-button:hover .info-icon,
+	.tooltip-button:focus-visible .info-icon {
 		color: #4ef0b2;
 	}
 
@@ -1029,7 +1063,7 @@
 		padding: 1rem;
 	}
 
-	.service-account-section label {
+	.service-account-section__label {
 		display: block;
 		font-size: 0.85rem;
 		color: rgba(184, 224, 213, 0.8);
